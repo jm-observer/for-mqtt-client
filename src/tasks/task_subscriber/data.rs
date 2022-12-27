@@ -1,5 +1,6 @@
 use crate::v3_1_1::{SubAck, UnsubAck};
 
+#[derive(Debug, Clone)]
 pub enum SubscribeMsg {
     SubAck(SubAck),
     UnsubAck(UnsubAck),

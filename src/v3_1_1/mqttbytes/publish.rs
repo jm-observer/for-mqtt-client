@@ -13,14 +13,14 @@ pub struct Publish {
 }
 
 impl Publish {
-    pub fn new<S: Into<String>, P: Into<Vec<u8>>>(topic: S, qos: QoS, payload: P) -> Publish {
+    pub fn new<S: Into<String>, P: Into<Bytes>>(topic: S, qos: QoS, payload: P) -> Publish {
         Publish {
             dup: false,
             qos,
             retain: false,
             pkid: 0,
             topic: topic.into(),
-            payload: Bytes::from(payload.into()),
+            payload: payload.into(),
         }
     }
 

@@ -11,10 +11,10 @@ use url::Url;
 
 mod data;
 
-use crate::tasks::task_connector::ConnectMsg;
+use crate::tasks::task_hub::HubMsg;
 use crate::tasks::task_publisher::PublishMsg;
 use crate::tasks::task_subscriber::SubscribeMsg;
-use crate::tasks::{InnerCommand, Senders};
+use crate::tasks::Senders;
 pub use data::*;
 
 #[derive(Clone, Debug)]
@@ -52,8 +52,9 @@ impl TaskNetwork {
                 .unwrap();
             if let Err(e) = self
                 .senders
-                .tx_broadcast
-                .send(InnerCommand::NetworkConnectSuccess)
+                .tx_hub
+                .send(HubMsg::NetworkConnectSuccess)
+                .await
             {
                 error!("{:?}", e);
             }
@@ -98,33 +99,21 @@ impl SubTaskNetworkReader {
         });
     }
     async fn run(mut self) {
-        let mut total_read = 0;
         let max_size = 1024;
         let mut buf = BytesMut::with_capacity(10 * 1024);
+        // let mut buf = [0u8; 10240];
         loop {
             let read = self.reader.read_buf(&mut buf).await.unwrap();
             if 0 == read {
-                // return if buf.is_empty() {
-                //     Err(io::Error::new(
-                //         io::ErrorKind::ConnectionAborted,
-                //         "connection closed by peer",
-                //     ))
-                // } else {
-                //     Err(io::Error::new(
-                //         io::ErrorKind::ConnectionReset,
-                //         "connection reset by peer",
-                //     ))
-                // };
+                warn!("");
+                break;
             }
-            total_read += read;
-            // if total_read >= required {
-            //     return Ok(total_read);
-            // }
+            debug!("{}", read);
             match self.parse(&mut buf, max_size).await {
-                Ok(packet) => {
-                    debug!("{:?}", packet)
+                Ok(packet) => {}
+                Err(e) => {
+                    error!("{:?}", e);
                 }
-                Err(_) => {}
             }
         }
     }
@@ -142,7 +131,7 @@ impl SubTaskNetworkReader {
                     Ok(())
                 }
                 PacketType::PingResp => {
-                    self.tx_connect_rel(ConnectMsg::PingResp).await;
+                    self.tx_connect_rel(HubMsg::PingResp).await;
                     Ok(())
                 }
                 PacketType::Disconnect => {
@@ -157,7 +146,7 @@ impl SubTaskNetworkReader {
         match packet_type {
             // PacketType::Connect => Packet::Connect(Connect::read(fixed_header, packet)?),
             PacketType::ConnAck => {
-                self.tx_connect_rel(ConnAck::read(fixed_header, packet)?.into())
+                self.tx_connect_rel(HubMsg::ConnAck(ConnAck::read(fixed_header, packet)?))
                     .await
             }
             PacketType::Publish => {
@@ -193,7 +182,7 @@ impl SubTaskNetworkReader {
             // PacketType::PingReq => Packet::PingReq,
             PacketType::PingResp => {
                 warn!("PingResp should be zero byte");
-                self.tx_connect_rel(ConnectMsg::PingResp).await
+                self.tx_connect_rel(HubMsg::PingResp).await
             }
             // PacketType::Disconnect => Packet::Disconnect,
             ty => {
@@ -209,12 +198,12 @@ impl SubTaskNetworkReader {
         }
     }
     async fn tx_subscribe_rel(&self, msg: SubscribeMsg) {
-        if self.senders.tx_subscriber.send(msg).await.is_err() {
+        if self.senders.tx_subscriber.send(msg).is_err() {
             error!("fail to send subscriber");
         }
     }
-    async fn tx_connect_rel(&self, msg: ConnectMsg) {
-        if self.senders.tx_connector.send(msg).await.is_err() {
+    async fn tx_connect_rel(&self, msg: HubMsg) {
+        if self.senders.tx_hub.send(msg).await.is_err() {
             error!("fail to send connector");
         }
     }

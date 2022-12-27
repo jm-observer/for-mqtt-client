@@ -1,5 +1,7 @@
 use super::*;
+use anyhow::Result;
 use bytes::{Buf, Bytes};
+use std::sync::Arc;
 
 /// Connection packet initiated by the client
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -9,8 +11,8 @@ pub struct Connect {
     /// Mqtt keep alive time
     pub keep_alive: u16,
     /// Client Id
-    pub client_id: String,
-     /// Clean session. Asks the broker to clear previous state
+    pub client_id: Arc<String>,
+    /// Clean session. Asks the broker to clear previous state
     pub clean_session: bool,
     /// Will that broker needs to publish when the client disconnects
     pub last_will: Option<LastWill>,
@@ -19,15 +21,18 @@ pub struct Connect {
 }
 
 impl Connect {
-    pub fn new<S: Into<String>>(id: S) -> Connect {
-        Connect {
+    pub fn new<S: Into<Arc<String>>>(id: S) -> Result<Bytes> {
+        let packet = Connect {
             protocol: Protocol::V4,
             keep_alive: 10,
             client_id: id.into(),
             clean_session: true,
             last_will: None,
             login: None,
-        }
+        };
+        let mut bytes = BytesMut::new();
+        packet.write(&mut bytes)?;
+        Ok(bytes.freeze())
     }
 
     pub fn set_login<U: Into<String>, P: Into<String>>(&mut self, u: U, p: P) -> &mut Connect {
@@ -89,7 +94,7 @@ impl Connect {
         let connect = Connect {
             protocol,
             keep_alive,
-            client_id,
+            client_id: Arc::new(client_id),
             clean_session,
             last_will,
             login,

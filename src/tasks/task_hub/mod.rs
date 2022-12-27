@@ -1,64 +1,106 @@
 mod data;
 
-use std::time::Duration;
-use tokio::sync::broadcast::{channel, Sender};
 use crate::tasks::task_network::{NetworkData, TaskNetwork};
+use crate::tasks::{MqttEvent, Senders, UserMsg};
 use crate::utils::Endpoint;
 use crate::v3_1_1::{Client, Connect, MqttOptions};
 use anyhow::Result;
+use log::{debug, error};
+use std::time::Duration;
+use tokio::sync::broadcast::{channel, Receiver, Sender};
 use tokio::sync::mpsc;
-use crate::tasks::{InnerCommand, MqttEvent, Senders, UserMsg};
-use crate::tasks::task_connector::TaskConnector;
+
+pub use data::HubMsg;
 
 pub struct TaskHub {
     options: MqttOptions,
-    user_endpoint: Endpoint<UserMsg, MqttEvent>,
-    mqtt_endpoint: Endpoint<MqttEvent, UserMsg>,
     senders: Senders,
+    rx: mpsc::Receiver<HubMsg>,
 }
 impl TaskHub {
-    pub async fn init(options: MqttOptions) -> Client {
-        let (user_endpoint, mqtt_endpoint) = Endpoint::channel(1024);
-
-        let (tx_broadcast, _) = channel(1024);
+    pub async fn init(options: MqttOptions) -> (Client, Receiver<MqttEvent>) {
+        let (tx_user, _) = channel(1024);
         let (tx_network_writer, rx_network_writer) = mpsc::channel(1024);
-        let (tx_connector, rx_connector) = mpsc::channel(1024);
         let (tx_publisher, rx_publisher) = mpsc::channel(1024);
-        let (tx_subscriber, rx_subscriber) = mpsc::channel(1024);
+        let (tx_subscriber, _) = channel(1024);
+        let (tx_hub, rx_hub) = mpsc::channel(1024);
 
-        let senders = Senders::init(tx_network_writer, tx_connector, tx_publisher, tx_subscriber, tx_broadcast);
+        let senders = Senders::init(
+            tx_network_writer,
+            tx_publisher,
+            tx_subscriber,
+            tx_user,
+            tx_hub,
+        );
 
         let (addr, port) = options.broker_address();
-        let network_task =
-            TaskNetwork::init(addr.parse().unwrap(), port, senders.clone(), rx_network_writer);
-        let task_connetor = TaskConnector::init(senders.clone(), options.clone(), rx_connector);
-
+        let network_task = TaskNetwork::init(
+            addr.parse().unwrap(),
+            port,
+            senders.clone(),
+            rx_network_writer,
+        );
         let hub = Self {
-            options, user_endpoint, mqtt_endpoint,
-            senders
+            options,
+            senders: senders.clone(),
+            rx: rx_hub,
         };
-        task_connetor.run().await;
+        let client = Client::init(senders);
+        let event_rx = client.init_receiver();
         network_task.run().await;
 
-        let client = Client::init(hub.user_endpoint.clone());
         tokio::spawn(async move {
-
+            hub.run().await.unwrap();
         });
-        client
+        (client, event_rx)
     }
-    async fn run(self) -> Result<()> {
-        tokio::time::sleep(Duration::from_secs(30)).await;
-        Ok(())
-    }
-
-    async fn deal_inner_msg(&mut self, msg: InnerCommand) -> Result<()> {
-        match msg {
-            InnerCommand::NetworkConnectSuccess => {
-
-            }
-            InnerCommand::NetworkConnectFail(_) => {}
+    async fn run(mut self) -> Result<()> {
+        let (mut a, mut b) = ringbuf::SharedRb::new(65535).split();
+        for i in 1..=u16::MAX {
+            a.push(i).unwrap();
         }
-
-        Ok(())
+        loop {
+            match self.rx.recv().await {
+                Some(req) => match req {
+                    HubMsg::RequestId(req) => {
+                        debug!("request id");
+                        if let Some(id) = b.pop() {
+                            req.send(id).unwrap();
+                        } else {
+                            todo!()
+                        }
+                    }
+                    HubMsg::RecoverId(id) => {
+                        a.push(id).unwrap();
+                    }
+                    HubMsg::ConnAck(ack) => {
+                        if ack.code.is_success() {
+                            debug!("connect success");
+                            // self.senders.tx_mqtt_event(MqttEvent::ConnectSuccess);
+                        } else {
+                            todo!()
+                            // self.senders
+                            //     .tx_mqtt_event(MqttEvent::ConnectFail(format!("{:?}", ack.code)));
+                        }
+                    }
+                    HubMsg::PingResp => {}
+                    HubMsg::Error => {}
+                    HubMsg::NetworkConnectSuccess => {
+                        let connect = Connect::new(self.options.client_id().clone()).unwrap();
+                        let receipter = self.senders.tx_network_default(connect).await.unwrap();
+                        match receipter.await {
+                            Ok(_) => {
+                                debug!("done");
+                            }
+                            Err(e) => {
+                                error!("fail to receive receipt")
+                            }
+                        }
+                    }
+                    HubMsg::NetworkConnectFail(_) => {}
+                },
+                None => {}
+            }
+        }
     }
 }

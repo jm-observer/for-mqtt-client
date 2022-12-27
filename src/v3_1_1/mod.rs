@@ -1,13 +1,14 @@
-use std::time::Duration;
-use crate::Transport;
 use crate::v3_1_1::mqttbytes::LastWill;
+use crate::{QoS, Transport};
+use bytes::Bytes;
+use std::time::Duration;
+use tokio::sync::broadcast::Receiver;
 
 mod mqttbytes;
 
-pub use mqttbytes::*;
-use crate::tasks::{MqttEvent, TaskHub, UserMsg};
+use crate::tasks::{MqttEvent, Senders, TaskHub, TaskSubscriber, UserMsg};
 use crate::utils::Endpoint;
-
+pub use mqttbytes::*;
 
 #[derive(Clone)]
 pub struct MqttOptions {
@@ -255,22 +256,26 @@ impl MqttOptions {
         self.manual_acks
     }
 
-
-
-    pub async fn run(self) -> Client {
+    pub async fn run(self) -> (Client, Receiver<MqttEvent>) {
         TaskHub::init(self).await
     }
 }
 
-
 pub struct Client {
-    user_endpoint: Endpoint<UserMsg, MqttEvent>
+    tx: Senders,
 }
 
 impl Client {
-    pub fn init(user_endpoint: Endpoint<UserMsg, MqttEvent>)  -> Self {
-        Self {
-            user_endpoint,
-        }
+    pub fn init(tx: Senders) -> Self {
+        Self { tx }
+    }
+    pub async fn publish(&self, topic: String, qos: QoS, payload: Bytes) {}
+    pub fn subscribe(&self, topic: String, qos: QoS) {
+        TaskSubscriber::init(self.tx.clone(), topic, qos);
+    }
+    pub async fn unsubscribe(&self) {}
+    pub async fn disconnect(&self) {}
+    pub fn init_receiver(&self) -> Receiver<MqttEvent> {
+        self.tx.rx_user()
     }
 }

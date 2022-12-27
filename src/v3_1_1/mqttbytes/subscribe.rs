@@ -1,5 +1,7 @@
 use super::*;
+use anyhow::Result;
 use bytes::{Buf, Bytes};
+use std::sync::Arc;
 
 /// Subscription packet
 #[derive(Clone, PartialEq, Eq)]
@@ -9,16 +11,18 @@ pub struct Subscribe {
 }
 
 impl Subscribe {
-    pub fn new<S: Into<String>>(path: S, qos: QoS) -> Subscribe {
+    pub fn new<S: Into<Arc<String>>>(path: S, qos: QoS, pkid: u16) -> Result<Bytes> {
         let filter = SubscribeFilter {
             path: path.into(),
             qos,
         };
-
-        Subscribe {
-            pkid: 0,
+        let mut bytes = BytesMut::new();
+        let subscribe = Subscribe {
+            pkid,
             filters: vec![filter],
-        }
+        };
+        subscribe.write(&mut bytes)?;
+        Ok(bytes.freeze())
     }
 
     pub fn new_many<T>(topics: T) -> Subscribe
@@ -31,7 +35,10 @@ impl Subscribe {
     }
 
     pub fn add(&mut self, path: String, qos: QoS) -> &mut Self {
-        let filter = SubscribeFilter { path, qos };
+        let filter = SubscribeFilter {
+            path: Arc::new(path),
+            qos,
+        };
 
         self.filters.push(filter);
         self
@@ -57,7 +64,7 @@ impl Subscribe {
             let requested_qos = options & 0b0000_0011;
 
             filters.push(SubscribeFilter {
-                path,
+                path: Arc::new(path),
                 qos: qos(requested_qos)?,
             });
         }
@@ -91,13 +98,16 @@ impl Subscribe {
 ///  Subscription filter
 #[derive(Clone, PartialEq, Eq)]
 pub struct SubscribeFilter {
-    pub path: String,
+    pub path: Arc<String>,
     pub qos: QoS,
 }
 
 impl SubscribeFilter {
     pub fn new(path: String, qos: QoS) -> SubscribeFilter {
-        SubscribeFilter { path, qos }
+        SubscribeFilter {
+            path: Arc::new(path),
+            qos,
+        }
     }
 
     fn len(&self) -> usize {

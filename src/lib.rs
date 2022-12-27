@@ -1,14 +1,7 @@
-#![allow(dead_code, unused)]
-
-extern crate core;
-
-pub mod v3_1_1;
+#![allow(dead_code, unused_mut, unused_imports, unused_variables)]
 mod tasks;
 pub mod utils;
-
-use tokio::sync::mpsc::{channel, Receiver, Sender};
-use crate::utils::Endpoint;
-
+pub mod v3_1_1;
 
 #[derive(Clone)]
 pub enum Transport {
@@ -23,5 +16,3 @@ pub enum QoS {
     AtLeastOnce = 1,
     ExactlyOnce = 2,
 }
-
-

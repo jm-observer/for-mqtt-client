@@ -7,8 +7,6 @@ use bytes::{Buf, BufMut, Bytes, BytesMut};
 use core::fmt;
 use std::slice::Iter;
 
-use super::*;
-
 mod connack;
 mod connect;
 mod disconnect;
@@ -23,6 +21,7 @@ mod subscribe;
 mod unsuback;
 mod unsubscribe;
 
+use crate::QoS;
 pub use connack::*;
 pub use connect::*;
 pub use disconnect::*;
@@ -36,7 +35,6 @@ pub use suback::*;
 pub use subscribe::*;
 pub use unsuback::*;
 pub use unsubscribe::*;
-use crate::QoS;
 
 /// Encapsulates all MQTT packet types
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -234,7 +232,6 @@ impl FixedHeader {
     pub fn frame_length(&self) -> usize {
         self.fixed_header_len + self.remaining_len
     }
-
 
     pub fn remaining_len(&self) -> usize {
         self.remaining_len
