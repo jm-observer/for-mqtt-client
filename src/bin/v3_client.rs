@@ -12,16 +12,7 @@ async fn main() -> Result<()> {
     let options = MqttOptions::new("abc", "broker.emqx.io", 1883);
     let (_client, mut event_rx) = options.run().await;
 
-    debug!("client");
     _client.subscribe("/tmp/me".to_string(), QoS::AtLeastOnce);
-    debug!("subscribe");
-    // tokio::spawn(async move {
-    //     while let Ok(event) = event_rx.recv().await {
-    //         debug!("{:?}", event);
-    //     }
-    //     error!("error");
-    // });
-
     sleep(Duration::from_secs(60)).await;
     Ok(())
 }

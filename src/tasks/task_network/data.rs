@@ -1,4 +1,5 @@
 use crate::tasks::{Receipt, Receipter};
+use crate::v3_1_1::ConnAck;
 use bytes::Bytes;
 use std::ops::Deref;
 use std::sync::Arc;
@@ -24,4 +25,12 @@ impl Deref for NetworkData {
     fn deref(&self) -> &Self::Target {
         &self.data
     }
+}
+
+#[derive(Debug)]
+pub enum NetworkMsg {
+    ConnAck(ConnAck),
+    PingResp,
+    NetworkConnectSuccess,
+    NetworkConnectFail(String),
 }

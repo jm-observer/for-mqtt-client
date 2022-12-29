@@ -26,6 +26,7 @@ pub struct TaskNetwork {
     senders: Senders,
     sub_task_tx: Sender<Command>,
     rx: mpsc::Receiver<NetworkData>,
+    tx_to_hub: mpsc::Sender<NetworkMsg>,
 }
 
 impl TaskNetwork {
@@ -34,6 +35,7 @@ impl TaskNetwork {
         port: u16,
         inner_tx: Senders,
         rx: mpsc::Receiver<NetworkData>,
+        tx_to_hub: mpsc::Sender<NetworkMsg>,
     ) -> Self {
         let (sub_task_tx, _) = channel(1024);
         Self {
@@ -42,25 +44,26 @@ impl TaskNetwork {
             senders: inner_tx,
             sub_task_tx,
             rx,
+            tx_to_hub,
         }
     }
     pub async fn run(mut self) {
         tokio::spawn(async move {
             debug!("{}: {}", self.addr, self.port);
-            let stream = tokio::net::TcpStream::connect((self.addr.as_str(), self.port))
+            let stream = TcpStream::connect((self.addr.as_str(), self.port))
                 .await
                 .unwrap();
-            if let Err(e) = self
-                .senders
-                .tx_hub
-                .send(HubMsg::NetworkConnectSuccess)
-                .await
-            {
+            if let Err(e) = self.tx_to_hub.send(NetworkMsg::NetworkConnectSuccess).await {
                 error!("{:?}", e);
             }
             let (reader, mut writer) = tokio::io::split(stream);
-            SubTaskNetworkReader::init(self.senders.clone(), reader, self.sub_task_tx.clone())
-                .await;
+            SubTaskNetworkReader::init(
+                self.senders.clone(),
+                reader,
+                self.sub_task_tx.clone(),
+                self.tx_to_hub.clone(),
+            )
+            .await;
             let mut buf = BytesMut::with_capacity(1024);
             loop {
                 match self.rx.recv().await {
@@ -85,14 +88,21 @@ struct SubTaskNetworkReader {
     senders: Senders,
     reader: ReadHalf<TcpStream>,
     sub_task_tx: Sender<Command>,
+    tx_to_hub: mpsc::Sender<NetworkMsg>,
 }
 
 impl SubTaskNetworkReader {
-    async fn init(senders: Senders, reader: ReadHalf<TcpStream>, sub_task_tx: Sender<Command>) {
+    async fn init(
+        senders: Senders,
+        reader: ReadHalf<TcpStream>,
+        sub_task_tx: Sender<Command>,
+        tx_to_hub: mpsc::Sender<NetworkMsg>,
+    ) {
         let reader = Self {
             senders,
             reader,
             sub_task_tx,
+            tx_to_hub,
         };
         tokio::spawn(async move {
             reader.run().await;
@@ -108,7 +118,6 @@ impl SubTaskNetworkReader {
                 warn!("");
                 break;
             }
-            debug!("{}", read);
             match self.parse(&mut buf, max_size).await {
                 Ok(packet) => {}
                 Err(e) => {
@@ -119,7 +128,7 @@ impl SubTaskNetworkReader {
     }
 
     /// Reads a stream of bytes and extracts next MQTT packet out of it
-    async fn parse(&self, stream: &mut BytesMut, max_size: usize) -> Result<(), Error> {
+    async fn parse(&self, stream: &mut BytesMut, max_size: usize) -> anyhow::Result<()> {
         let fixed_header = check(stream.iter(), max_size)?;
         let packet = stream.split_to(fixed_header.frame_length());
         let packet_type = fixed_header.packet_type()?;
@@ -131,14 +140,14 @@ impl SubTaskNetworkReader {
                     Ok(())
                 }
                 PacketType::PingResp => {
-                    self.tx_connect_rel(HubMsg::PingResp).await;
+                    // self.tx_connect_rel(HubMsg::PingResp).await;
                     Ok(())
                 }
                 PacketType::Disconnect => {
                     warn!("should not receive disconnect");
                     Ok(())
                 }
-                _ => Err(Error::PayloadRequired),
+                _ => Err(Error::PayloadRequired)?,
             };
         }
 
@@ -146,43 +155,44 @@ impl SubTaskNetworkReader {
         match packet_type {
             // PacketType::Connect => Packet::Connect(Connect::read(fixed_header, packet)?),
             PacketType::ConnAck => {
-                self.tx_connect_rel(HubMsg::ConnAck(ConnAck::read(fixed_header, packet)?))
-                    .await
+                self.tx_to_hub
+                    .send(NetworkMsg::ConnAck(ConnAck::read(fixed_header, packet)?))
+                    .await?;
             }
             PacketType::Publish => {
                 self.tx_publish_rel(Publish::read(fixed_header, packet)?.into())
-                    .await
+                    .await;
             }
             PacketType::PubAck => {
                 self.tx_publish_rel(PubAck::read(fixed_header, packet)?.into())
-                    .await
+                    .await;
             }
             PacketType::PubRec => {
                 self.tx_publish_rel(PubRec::read(fixed_header, packet)?.into())
-                    .await
+                    .await;
             }
             PacketType::PubRel => {
                 self.tx_publish_rel(PubRel::read(fixed_header, packet)?.into())
-                    .await
+                    .await;
             }
             PacketType::PubComp => {
                 self.tx_publish_rel(PubComp::read(fixed_header, packet)?.into())
-                    .await
+                    .await;
             }
             // PacketType::Subscribe => Packet::Subscribe(Subscribe::read(fixed_header, packet)?),
             PacketType::SubAck => {
                 self.tx_subscribe_rel(SubAck::read(fixed_header, packet)?.into())
-                    .await
+                    .await;
             }
             // PacketType::Unsubscribe => Packet::Unsubscribe(Unsubscribe::read(fixed_header, packet)?),
             PacketType::UnsubAck => {
                 self.tx_subscribe_rel(UnsubAck::read(fixed_header, packet)?.into())
-                    .await
+                    .await;
             }
             // PacketType::PingReq => Packet::PingReq,
             PacketType::PingResp => {
                 warn!("PingResp should be zero byte");
-                self.tx_connect_rel(HubMsg::PingResp).await
+                self.tx_to_hub.send(NetworkMsg::PingResp).await?;
             }
             // PacketType::Disconnect => Packet::Disconnect,
             ty => {
