@@ -1,28 +1,33 @@
+mod task_connect;
 mod task_hub;
 mod task_network;
-mod task_publisher;
-mod task_subscriber;
+mod task_ping;
+mod task_publish;
+mod task_subscribe;
 
 use bytes::Bytes;
 use log::{error, warn};
 use std::sync::Arc;
 pub use task_hub::TaskHub;
-pub use task_publisher::TaskPublishMg;
-pub use task_subscriber::TaskSubscriber;
+pub use task_publish::TaskPublishMg;
+pub use task_subscribe::TaskSubscriber;
 
 use crate::tasks::task_hub::HubMsg;
 use crate::tasks::task_network::NetworkData;
-use crate::tasks::task_publisher::PublishMsg;
-use crate::tasks::task_subscriber::SubscribeMsg;
+use crate::tasks::task_publish::PublishMsg;
+use crate::tasks::task_subscribe::SubscribeMsg;
+use crate::v3_1_1::{ConnAck, PingResp};
 use anyhow::Result;
 use tokio::sync::broadcast::*;
 use tokio::sync::{mpsc, oneshot};
 
 #[derive(Clone)]
 pub struct Senders {
-    tx_network_writer: mpsc::Sender<NetworkData>,
-    tx_publisher: mpsc::Sender<PublishMsg>,
-    tx_subscriber: Sender<SubscribeMsg>,
+    tx_network: mpsc::Sender<NetworkData>,
+    tx_publish: mpsc::Sender<PublishMsg>,
+    tx_subscribe: Sender<SubscribeMsg>,
+    tx_ping: Sender<PingResp>,
+    tx_connect: Sender<ConnAck>,
     tx_user: Sender<MqttEvent>,
     tx_hub: mpsc::Sender<HubMsg>,
 }
@@ -34,13 +39,17 @@ impl Senders {
         tx_subscriber: Sender<SubscribeMsg>,
         tx_user: Sender<MqttEvent>,
         tx_hub: mpsc::Sender<HubMsg>,
+        tx_ping: Sender<PingResp>,
+        tx_connect: Sender<ConnAck>,
     ) -> Self {
         Self {
-            tx_subscriber,
-            tx_publisher,
-            tx_network_writer,
+            tx_subscribe: tx_subscriber,
+            tx_publish: tx_publisher,
+            tx_network: tx_network_writer,
+            tx_ping,
             tx_user,
             tx_hub,
+            tx_connect,
         }
     }
     pub fn rx_user(&self) -> Receiver<MqttEvent> {
@@ -51,12 +60,18 @@ impl Senders {
             warn!("fail to tx mqtt event")
         }
     }
+    pub fn subscribe_ping(&self) -> Receiver<PingResp> {
+        self.tx_ping.subscribe()
+    }
+    pub fn subscribe_connect(&self) -> Receiver<ConnAck> {
+        self.tx_connect.subscribe()
+    }
     pub async fn tx_network_default<T: Into<Arc<Bytes>>>(
         &self,
         bytes: T,
     ) -> Result<oneshot::Receiver<Receipt>> {
         let (receipter, rx) = Receipter::default();
-        self.tx_network_writer
+        self.tx_network
             .send(NetworkData {
                 data: bytes.into(),
                 receipter,

@@ -40,7 +40,7 @@ impl TaskSubscriber {
         debug!("pkid={}", pkid);
         let subscribe =
             Arc::new(Subscribe::new(self.topic.clone(), self.qos.clone(), pkid).unwrap());
-        let mut rx_ack = self.tx.tx_subscriber.subscribe();
+        let mut rx_ack = self.tx.tx_subscribe.subscribe();
         let rx = self.tx.tx_network_default(subscribe.clone()).await.unwrap();
         rx.await.unwrap();
         debug!("had send to broker");

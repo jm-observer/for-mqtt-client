@@ -14,6 +14,7 @@ use tokio::select;
 use tokio::sync::broadcast::{channel, Receiver, Sender};
 use tokio::sync::mpsc;
 
+use crate::tasks::task_connect::{Connected, TaskConnect};
 use crate::tasks::task_hub::data::{Reason, State};
 pub use data::HubMsg;
 
@@ -24,23 +25,29 @@ pub struct TaskHub {
     senders: Senders,
     state: State,
     rx: mpsc::Receiver<HubMsg>,
-    rx_from_network: mpsc::Receiver<NetworkMsg>,
+    tx_for_connect: mpsc::Sender<Connected>,
+    rx_from_connect: mpsc::Receiver<Connected>,
 }
 impl TaskHub {
     pub async fn init(options: MqttOptions) -> (Client, Receiver<MqttEvent>) {
         let (tx_user, _) = channel(1024);
-        let (tx_network_writer, rx_network_writer) = mpsc::channel(1024);
-        let (tx_publisher, rx_publisher) = mpsc::channel(1024);
-        let (tx_subscriber, _) = channel(1024);
+        let (tx_network_write, rx_network_writer) = mpsc::channel(1024);
+        let (tx_publish, rx_publisher) = mpsc::channel(1024);
+        let (tx_subscribe, _) = channel(1024);
+        let (tx_ping, _) = channel(1024);
+        let (tx_connect, _) = channel(1024);
+
         let (tx_hub, rx_hub) = mpsc::channel(1024);
-        let (tx_to_hub, rx_from_network) = mpsc::channel(1024);
+        let (tx_for_connect, rx_from_connect) = mpsc::channel(1024);
 
         let senders = Senders::init(
-            tx_network_writer,
-            tx_publisher,
-            tx_subscriber,
+            tx_network_write,
+            tx_publish,
+            tx_subscribe,
             tx_user,
             tx_hub,
+            tx_ping,
+            tx_connect,
         );
 
         let (addr, port) = options.broker_address();
@@ -49,14 +56,14 @@ impl TaskHub {
             port,
             senders.clone(),
             rx_network_writer,
-            tx_to_hub,
         );
         let hub = Self {
             options,
             senders: senders.clone(),
             rx: rx_hub,
             state: State::default(),
-            rx_from_network,
+            rx_from_connect,
+            tx_for_connect,
         };
         let client = Client::init(senders);
         let event_rx = client.init_receiver();
@@ -76,21 +83,48 @@ impl TaskHub {
             if self.state.is_connected() {
                 self._run(&mut a, &mut b).await;
             } else {
-                self.connect().await;
+                self.try_to_connect().await;
             }
         }
     }
-    async fn deal_connected_msg(&mut self, req: NetworkMsg) {
-        match req {
-            NetworkMsg::NetworkConnectFail(e) => {
-                error!("{}", e);
-                self.state = State::UnConnected(Reason::NetworkErr(e));
+
+    async fn _run(
+        &mut self,
+        a: &mut Producer<u16, Arc<SharedRb>>,
+        b: &mut Consumer<u16, Arc<SharedRb>>,
+    ) {
+        loop {
+            if !self.state.is_connected() {
+                return;
             }
-            msg => {
-                warn!("{:?}", msg);
+            select! {
+                hub_msg = self.rx.recv() => match hub_msg {
+                    Some(msg) => self.deal_hub_msg(msg, a, b).await,
+                    None => todo!()
+                }
             }
         }
     }
+    ///
+    async fn try_to_connect(&mut self) {
+        loop {
+            TaskConnect::init(
+                self.options.clone(),
+                self.senders.clone(),
+                self.tx_for_connect.clone(),
+            );
+            match self.rx_from_connect.recv().await {
+                Some(req) => {
+                    self.state = State::Connected;
+                    break;
+                }
+                None => {
+                    error!("");
+                }
+            }
+        }
+    }
+
     async fn deal_hub_msg(
         &mut self,
         req: HubMsg,
@@ -111,57 +145,12 @@ impl TaskHub {
                 a.push(id).unwrap();
             }
             HubMsg::Error => {}
-        }
-    }
-    async fn _run(
-        &mut self,
-        a: &mut Producer<u16, Arc<SharedRb>>,
-        b: &mut Consumer<u16, Arc<SharedRb>>,
-    ) {
-        loop {
-            select! {
-                hub_msg = self.rx.recv() => match hub_msg {
-                    Some(msg) => self.deal_hub_msg(msg, a, b).await,
-                    None => todo!()
-                },
-                network_msg = self.rx_from_network.recv() => match network_msg{
-                    Some(msg) => self.deal_connected_msg(msg).await,
-                    None => todo!()
-                }
+            HubMsg::PingSuccess => {
+                self.state = State::Connected;
             }
-        }
-    }
-    async fn connect(&mut self) {
-        loop {
-            match self.rx_from_network.recv().await {
-                Some(req) => match req {
-                    NetworkMsg::ConnAck(ack) => {
-                        if ack.code.is_success() {
-                            debug!("connect success");
-                            self.state = State::Connected;
-                            break;
-                        } else {
-                            todo!()
-                        }
-                    }
-                    NetworkMsg::PingResp => {}
-                    NetworkMsg::NetworkConnectSuccess => {
-                        let connect = Connect::new(self.options.client_id().clone()).unwrap();
-                        let receipter = self.senders.tx_network_default(connect).await.unwrap();
-                        match receipter.await {
-                            Ok(_) => {
-                                debug!("done");
-                            }
-                            Err(e) => {
-                                error!("fail to receive receipt")
-                            }
-                        }
-                    }
-                    NetworkMsg::NetworkConnectFail(e) => {
-                        error!("{}", e);
-                    }
-                },
-                None => {}
+            HubMsg::PingFail => {
+                self.state = State::UnConnected(Reason::PingFail);
+                todo!()
             }
         }
     }

@@ -1,19 +1,21 @@
 use crate::v3_1_1::*;
 use bytes::BytesMut;
-use log::{debug, error, warn};
+use log::{debug, error, info, warn};
 use std::io;
+use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, ReadHalf};
 use tokio::net::TcpStream;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::{channel, Sender};
 use tokio::sync::mpsc;
+use tokio::time::sleep;
 use url::Url;
 
 mod data;
 
 use crate::tasks::task_hub::HubMsg;
-use crate::tasks::task_publisher::PublishMsg;
-use crate::tasks::task_subscriber::SubscribeMsg;
+use crate::tasks::task_publish::PublishMsg;
+use crate::tasks::task_subscribe::SubscribeMsg;
 use crate::tasks::Senders;
 pub use data::*;
 
@@ -26,7 +28,6 @@ pub struct TaskNetwork {
     senders: Senders,
     sub_task_tx: Sender<Command>,
     rx: mpsc::Receiver<NetworkData>,
-    tx_to_hub: mpsc::Sender<NetworkMsg>,
 }
 
 impl TaskNetwork {
@@ -35,7 +36,6 @@ impl TaskNetwork {
         port: u16,
         inner_tx: Senders,
         rx: mpsc::Receiver<NetworkData>,
-        tx_to_hub: mpsc::Sender<NetworkMsg>,
     ) -> Self {
         let (sub_task_tx, _) = channel(1024);
         Self {
@@ -44,31 +44,22 @@ impl TaskNetwork {
             senders: inner_tx,
             sub_task_tx,
             rx,
-            tx_to_hub,
         }
     }
     pub async fn run(mut self) {
         tokio::spawn(async move {
             debug!("{}: {}", self.addr, self.port);
-            let stream = TcpStream::connect((self.addr.as_str(), self.port))
-                .await
-                .unwrap();
-            if let Err(e) = self.tx_to_hub.send(NetworkMsg::NetworkConnectSuccess).await {
-                error!("{:?}", e);
-            }
+            let stream = self.try_connect().await;
             let (reader, mut writer) = tokio::io::split(stream);
-            SubTaskNetworkReader::init(
-                self.senders.clone(),
-                reader,
-                self.sub_task_tx.clone(),
-                self.tx_to_hub.clone(),
-            )
-            .await;
+            SubTaskNetworkReader::init(self.senders.clone(), reader, self.sub_task_tx.clone())
+                .await;
             let mut buf = BytesMut::with_capacity(1024);
             loop {
                 match self.rx.recv().await {
                     Some(val) => {
+                        debug!("{:?}", val);
                         let Err(e) = writer.write_all(val.as_ref().as_ref()).await else {
+                            debug!("done");
                             val.done();
                             continue;
                         };
@@ -82,27 +73,31 @@ impl TaskNetwork {
             }
         });
     }
+
+    async fn try_connect(&self) -> TcpStream {
+        loop {
+            let Ok(stream) = TcpStream::connect((self.addr.as_str(), self.port))
+                .await else {
+                continue;
+            };
+            info!("tcp connect success");
+            return stream;
+        }
+    }
 }
 
 struct SubTaskNetworkReader {
     senders: Senders,
     reader: ReadHalf<TcpStream>,
     sub_task_tx: Sender<Command>,
-    tx_to_hub: mpsc::Sender<NetworkMsg>,
 }
 
 impl SubTaskNetworkReader {
-    async fn init(
-        senders: Senders,
-        reader: ReadHalf<TcpStream>,
-        sub_task_tx: Sender<Command>,
-        tx_to_hub: mpsc::Sender<NetworkMsg>,
-    ) {
+    async fn init(senders: Senders, reader: ReadHalf<TcpStream>, sub_task_tx: Sender<Command>) {
         let reader = Self {
             senders,
             reader,
             sub_task_tx,
-            tx_to_hub,
         };
         tokio::spawn(async move {
             reader.run().await;
@@ -113,7 +108,15 @@ impl SubTaskNetworkReader {
         let mut buf = BytesMut::with_capacity(10 * 1024);
         // let mut buf = [0u8; 10240];
         loop {
-            let read = self.reader.read_buf(&mut buf).await.unwrap();
+            let read = match self.reader.read_buf(&mut buf).await {
+                Ok(len) => len,
+                Err(e) => {
+                    // 测试
+                    error!("{:?}", e);
+                    sleep(Duration::from_secs(10)).await;
+                    continue;
+                }
+            };
             if 0 == read {
                 warn!("");
                 break;
@@ -155,9 +158,9 @@ impl SubTaskNetworkReader {
         match packet_type {
             // PacketType::Connect => Packet::Connect(Connect::read(fixed_header, packet)?),
             PacketType::ConnAck => {
-                self.tx_to_hub
-                    .send(NetworkMsg::ConnAck(ConnAck::read(fixed_header, packet)?))
-                    .await?;
+                self.senders
+                    .tx_connect
+                    .send(ConnAck::read(fixed_header, packet)?)?;
             }
             PacketType::Publish => {
                 self.tx_publish_rel(Publish::read(fixed_header, packet)?.into())
@@ -192,7 +195,7 @@ impl SubTaskNetworkReader {
             // PacketType::PingReq => Packet::PingReq,
             PacketType::PingResp => {
                 warn!("PingResp should be zero byte");
-                self.tx_to_hub.send(NetworkMsg::PingResp).await?;
+                self.senders.tx_ping.send(PingResp)?;
             }
             // PacketType::Disconnect => Packet::Disconnect,
             ty => {
@@ -203,12 +206,12 @@ impl SubTaskNetworkReader {
     }
 
     async fn tx_publish_rel(&self, msg: PublishMsg) {
-        if self.senders.tx_publisher.send(msg).await.is_err() {
+        if self.senders.tx_publish.send(msg).await.is_err() {
             error!("fail to send publisher");
         }
     }
     async fn tx_subscribe_rel(&self, msg: SubscribeMsg) {
-        if self.senders.tx_subscriber.send(msg).is_err() {
+        if self.senders.tx_subscribe.send(msg).is_err() {
             error!("fail to send subscriber");
         }
     }

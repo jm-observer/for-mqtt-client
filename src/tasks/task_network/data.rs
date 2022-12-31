@@ -30,7 +30,6 @@ impl Deref for NetworkData {
 #[derive(Debug)]
 pub enum NetworkMsg {
     ConnAck(ConnAck),
-    PingResp,
     NetworkConnectSuccess,
     NetworkConnectFail(String),
 }

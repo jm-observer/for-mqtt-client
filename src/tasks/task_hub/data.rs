@@ -8,6 +8,8 @@ pub enum HubMsg {
     RequestId(tokio::sync::oneshot::Sender<u16>),
     RecoverId(u16),
     Error,
+    PingSuccess,
+    PingFail,
 }
 
 #[derive(Debug, Clone)]
@@ -19,6 +21,7 @@ pub enum State {
 pub enum Reason {
     Init,
     NetworkErr(String),
+    PingFail,
 }
 impl State {
     pub fn is_connected(&self) -> bool {
