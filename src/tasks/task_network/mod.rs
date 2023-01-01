@@ -1,19 +1,15 @@
 use crate::v3_1_1::*;
 use anyhow::Context;
 use anyhow::Result;
-use bytes::{BufMut, Bytes, BytesMut};
+use bytes::{Bytes, BytesMut};
 use log::{debug, error, info, warn};
-use std::io;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::io::{AsyncReadExt, AsyncWriteExt, ReadHalf};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::select;
-use tokio::sync::broadcast::error::RecvError;
-use tokio::sync::broadcast::{channel, Sender};
 use tokio::sync::mpsc;
 use tokio::time::sleep;
-use url::Url;
 
 mod data;
 
@@ -76,7 +72,7 @@ impl TaskNetwork {
                                 self.is_connected = false;
                                 continue;
                             }
-                            if let Err(e) = self.deal_network_msg(&mut buf, len).await {
+                            if let Err(e) = self.deal_network_msg(&mut buf).await {
                                 error!("{:?}", e);
                             }
                         }
@@ -110,7 +106,7 @@ impl TaskNetwork {
         }
     }
 
-    async fn deal_network_msg(&mut self, buf: &mut BytesMut, len: usize) -> Result<()> {
+    async fn deal_network_msg(&mut self, buf: &mut BytesMut) -> Result<()> {
         // todo to optimize
         let max_size = 1024;
         self.parse(buf, max_size).await?;
@@ -147,7 +143,7 @@ impl TaskNetwork {
                                     if len == 0 {
                                         break;
                                     }
-                                    if let Err(e) = self.deal_network_msg(buf, len).await {
+                                    if let Err(e) = self.deal_network_msg(buf).await {
                                         error!("{:?}", e);
                                         continue;
                                     }
@@ -203,7 +199,7 @@ impl TaskNetwork {
         match packet_type {
             // PacketType::Connect => Packet::Connect(Connect::read(fixed_header, packet)?),
             PacketType::ConnAck => {
-                let ack = ConnAck::read(fixed_header, packet)?;
+                let _ = ConnAck::read(fixed_header, packet)?;
                 self.is_connected = true;
                 self.tx.send(NetworkStaus::Connected).await?;
             }

@@ -1,5 +1,4 @@
-use crate::tasks::{Receipt, Receipter};
-use crate::v3_1_1::ConnAck;
+use crate::tasks::Receipter;
 use bytes::Bytes;
 use std::ops::Deref;
 use std::sync::Arc;
@@ -44,11 +43,4 @@ impl Deref for DataWaitingToBeSend {
     fn deref(&self) -> &Self::Target {
         &self.data
     }
-}
-
-#[derive(Debug)]
-pub enum NetworkMsg {
-    ConnAck(ConnAck),
-    NetworkConnectSuccess,
-    NetworkConnectFail(String),
 }

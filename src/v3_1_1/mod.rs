@@ -7,8 +7,7 @@ use tokio::sync::broadcast::Receiver;
 
 mod mqttbytes;
 
-use crate::tasks::{MqttEvent, Senders, TaskHub, TaskSubscriber, UserMsg};
-use crate::utils::Endpoint;
+use crate::tasks::{MqttEvent, Senders, TaskHub, TaskSubscriber};
 pub use mqttbytes::*;
 
 #[derive(Clone)]

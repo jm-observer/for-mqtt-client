@@ -1,9 +1,5 @@
 use crate::tasks::task_network::NetworkStaus;
-use crate::v3_1_1::{ConnAck, Connect};
-use bytes::Bytes;
 use std::default::Default;
-use std::sync::Arc;
-use tokio::sync::broadcast::Sender;
 
 #[derive(Debug)]
 pub enum HubMsg {

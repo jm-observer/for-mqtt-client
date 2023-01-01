@@ -1,5 +1,4 @@
 use super::*;
-use anyhow::Result;
 use bytes::{BufMut, BytesMut};
 
 pub struct PingReq;

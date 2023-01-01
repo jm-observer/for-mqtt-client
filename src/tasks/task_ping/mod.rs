@@ -1,14 +1,10 @@
 use crate::tasks::task_hub::HubMsg;
-use crate::tasks::task_network::NetworkMsg;
 use crate::tasks::Senders;
-use crate::v3_1_1::{PingReq, Subscribe};
-use crate::QoS;
-use chrono::{Local, Timelike};
+use crate::v3_1_1::PingReq;
 use log::{debug, error};
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 use tokio::spawn;
-use tokio::sync::oneshot;
 use tokio::time::timeout;
 
 /// consider the order in which pushlish   are repeated
@@ -35,7 +31,7 @@ impl TaskPing {
             } else {
                 timeout_time -= 1;
                 if timeout_time <= 0 {
-                    if let Err(e) = self.tx.tx_hub.send(HubMsg::PingFail).await {
+                    if let Err(_) = self.tx.tx_hub.send(HubMsg::PingFail).await {
                         error!("");
                     }
                     return;
@@ -61,7 +57,7 @@ impl TaskPing {
                 timeout_time -= 1;
             }
         }
-        if let Err(e) = self.tx.tx_hub.send(HubMsg::PingFail).await {
+        if let Err(_) = self.tx.tx_hub.send(HubMsg::PingFail).await {
             error!("");
         }
     }

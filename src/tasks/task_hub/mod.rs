@@ -1,23 +1,19 @@
 mod data;
 
-use crate::tasks::task_network::{
-    Data, DataWaitingToBeSend, NetworkMsg, NetworkStaus, TaskNetwork,
-};
-use crate::tasks::{MqttEvent, Senders, UserMsg};
-use crate::utils::Endpoint;
+use crate::tasks::task_network::{Data, NetworkStaus, TaskNetwork};
+use crate::tasks::{MqttEvent, Senders};
 use crate::v3_1_1::{Client, Connect, MqttOptions};
 use anyhow::Result;
-use log::{debug, error, warn};
+use log::{debug, error};
 use ringbuf::{Consumer, Producer};
 use std::mem::MaybeUninit;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::broadcast::{channel, Receiver, Sender};
+use tokio::sync::broadcast::{channel, Receiver};
 use tokio::sync::mpsc;
 use tokio::time::sleep;
 use tokio::{select, spawn};
 
-use crate::tasks::task_connect::{Connected, TaskConnect};
 use crate::tasks::task_hub::data::{KeepAliveTime, Reason, State};
 use crate::tasks::task_ping::TaskPing;
 pub use data::HubMsg;

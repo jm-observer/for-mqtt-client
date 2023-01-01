@@ -1,4 +1,3 @@
-mod task_connect;
 mod task_hub;
 mod task_keep_alive;
 mod task_network;
