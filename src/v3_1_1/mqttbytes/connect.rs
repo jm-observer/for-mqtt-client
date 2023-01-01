@@ -1,4 +1,5 @@
 use super::*;
+use crate::v3_1_1::MqttOptions;
 use anyhow::Result;
 use bytes::{Buf, Bytes};
 use std::sync::Arc;
@@ -21,24 +22,32 @@ pub struct Connect {
 }
 
 impl Connect {
-    pub fn new<S: Into<Arc<String>>>(id: S) -> Result<Bytes> {
+    pub fn new(option: &MqttOptions) -> Result<Bytes> {
+        let login = match &option.credentials {
+            None => None,
+            Some((user, password)) => Some(Login::new(user.clone(), password.clone())),
+        };
         let packet = Connect {
             protocol: Protocol::V4,
-            keep_alive: 10,
-            client_id: id.into(),
-            clean_session: true,
-            last_will: None,
-            login: None,
+            keep_alive: option.keep_alive.into(),
+            client_id: option.client_id.clone(),
+            clean_session: option.clean_session,
+            last_will: option.last_will.clone(),
+            login,
         };
         let mut bytes = BytesMut::new();
         packet.write(&mut bytes)?;
         Ok(bytes.freeze())
     }
 
-    pub fn set_login<U: Into<String>, P: Into<String>>(&mut self, u: U, p: P) -> &mut Connect {
+    pub fn set_login<U: Into<Arc<String>>, P: Into<Arc<String>>>(
+        &mut self,
+        u: U,
+        p: P,
+    ) -> &mut Connect {
         let login = Login {
             username: u.into(),
-            password: p.into(),
+            password: Arc::from(p.into()),
         };
 
         self.login = Some(login);
@@ -207,12 +216,12 @@ impl LastWill {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Login {
-    pub username: String,
-    pub password: String,
+    pub username: Arc<String>,
+    pub password: Arc<String>,
 }
 
 impl Login {
-    pub fn new<U: Into<String>, P: Into<String>>(u: U, p: P) -> Login {
+    pub fn new<U: Into<Arc<String>>, P: Into<Arc<String>>>(u: U, p: P) -> Login {
         Login {
             username: u.into(),
             password: p.into(),
@@ -220,15 +229,15 @@ impl Login {
     }
 
     fn read(connect_flags: u8, bytes: &mut Bytes) -> Result<Option<Login>, Error> {
-        let username = match connect_flags & 0b1000_0000 {
+        let username = Arc::new(match connect_flags & 0b1000_0000 {
             0 => String::new(),
             _ => read_mqtt_string(bytes)?,
-        };
+        });
 
-        let password = match connect_flags & 0b0100_0000 {
+        let password = Arc::new(match connect_flags & 0b0100_0000 {
             0 => String::new(),
             _ => read_mqtt_string(bytes)?,
-        };
+        });
 
         if username.is_empty() && password.is_empty() {
             Ok(None)
@@ -267,7 +276,7 @@ impl Login {
     }
 
     pub fn validate(&self, username: &str, password: &str) -> bool {
-        (self.username == *username) && (self.password == *password)
+        (self.username.as_str() == username) && (self.password.as_str() == password)
     }
 }
 
@@ -338,7 +347,7 @@ mod test {
             Connect {
                 protocol: Protocol::V4,
                 keep_alive: 10,
-                client_id: "test".to_owned(),
+                client_id: "test".to_owned().into(),
                 clean_session: true,
                 last_will: Some(LastWill::new("/a", "offline", QoS::AtLeastOnce, false)),
                 login: Some(Login::new("rumq", "mq")),
@@ -397,7 +406,7 @@ mod test {
         let connect = Connect {
             protocol: Protocol::V4,
             keep_alive: 10,
-            client_id: "test".to_owned(),
+            client_id: "test".to_owned().into(),
             clean_session: true,
             last_will: Some(LastWill::new("/a", "offline", QoS::AtLeastOnce, false)),
             login: Some(Login::new("rust", "mq")),

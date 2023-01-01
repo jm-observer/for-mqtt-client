@@ -23,22 +23,24 @@ pub struct TaskConnect {
 impl TaskConnect {
     pub fn init(options: MqttOptions, tx: Senders, tx_to_hub: mpsc::Sender<Connected>) {
         spawn(async move {
-            let mut subscriber = Self {
+            let mut connect = Self {
                 tx_to_hub,
                 tx,
                 options,
             };
+            connect._run().await;
         });
     }
     async fn _run(&mut self) {
         debug!("start to connect");
-        let connect = Arc::new(Connect::new(self.options.client_id().clone()).unwrap());
+        // todo
+        let connect = Arc::new(Connect::new(&self.options).unwrap());
         let mut rx_ack = self.tx.subscribe_connect();
         loop {
             let receipter = self.tx.tx_network_default(connect.clone()).await.unwrap();
             match receipter.await {
                 Ok(_) => {
-                    debug!("done");
+                    // debug!("done");
                 }
                 Err(e) => {
                     error!("fail to receive receipt");

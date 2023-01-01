@@ -1,4 +1,5 @@
 use crate::v3_1_1::*;
+use anyhow::Context;
 use bytes::BytesMut;
 use log::{debug, error, info, warn};
 use std::io;
@@ -46,20 +47,19 @@ impl TaskNetwork {
             rx,
         }
     }
-    pub async fn run(mut self) {
+    pub fn run(mut self) {
         tokio::spawn(async move {
             debug!("{}: {}", self.addr, self.port);
             let stream = self.try_connect().await;
             let (reader, mut writer) = tokio::io::split(stream);
-            SubTaskNetworkReader::init(self.senders.clone(), reader, self.sub_task_tx.clone())
-                .await;
+            SubTaskNetworkReader::init(self.senders.clone(), reader, self.sub_task_tx.clone());
             let mut buf = BytesMut::with_capacity(1024);
             loop {
                 match self.rx.recv().await {
                     Some(val) => {
                         debug!("{:?}", val);
                         let Err(e) = writer.write_all(val.as_ref().as_ref()).await else {
-                            debug!("done");
+                            // debug!("done");
                             val.done();
                             continue;
                         };
@@ -93,7 +93,7 @@ struct SubTaskNetworkReader {
 }
 
 impl SubTaskNetworkReader {
-    async fn init(senders: Senders, reader: ReadHalf<TcpStream>, sub_task_tx: Sender<Command>) {
+    fn init(senders: Senders, reader: ReadHalf<TcpStream>, sub_task_tx: Sender<Command>) {
         let reader = Self {
             senders,
             reader,
@@ -119,6 +119,7 @@ impl SubTaskNetworkReader {
             };
             if 0 == read {
                 warn!("");
+                // continue;
                 break;
             }
             match self.parse(&mut buf, max_size).await {
@@ -135,6 +136,7 @@ impl SubTaskNetworkReader {
         let fixed_header = check(stream.iter(), max_size)?;
         let packet = stream.split_to(fixed_header.frame_length());
         let packet_type = fixed_header.packet_type()?;
+        debug!("{:?}", packet_type);
         if fixed_header.remaining_len() == 0 {
             // no payload packets
             return match packet_type {
@@ -143,7 +145,10 @@ impl SubTaskNetworkReader {
                     Ok(())
                 }
                 PacketType::PingResp => {
-                    // self.tx_connect_rel(HubMsg::PingResp).await;
+                    self.senders
+                        .tx_ping
+                        .send(PingResp)
+                        .context("send ping resp fail")?;
                     Ok(())
                 }
                 PacketType::Disconnect => {

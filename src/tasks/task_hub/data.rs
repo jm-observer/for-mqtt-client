@@ -10,6 +10,7 @@ pub enum HubMsg {
     Error,
     PingSuccess,
     PingFail,
+    KeepAlive(KeepAliveTime),
 }
 
 #[derive(Debug, Clone)]
@@ -23,6 +24,25 @@ pub enum Reason {
     NetworkErr(String),
     PingFail,
 }
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct KeepAliveTime(u64);
+
+impl KeepAliveTime {
+    pub fn init() -> Self {
+        Self(0)
+    }
+    pub fn update(&mut self) -> Self {
+        if let Some(time) = self.0.checked_add(1) {
+            self.0 = time;
+        } else {
+            self.0 = 0;
+        }
+        let old = self.clone();
+        old
+    }
+}
+
 impl State {
     pub fn is_connected(&self) -> bool {
         match self {

@@ -1,6 +1,7 @@
 use crate::v3_1_1::mqttbytes::LastWill;
 use crate::{QoS, Transport};
 use bytes::Bytes;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast::Receiver;
 
@@ -19,13 +20,13 @@ pub struct MqttOptions {
     // What transport protocol to use
     transport: Transport,
     /// keep alive time to send pingreq to broker when the connection is idle
-    keep_alive: Duration,
+    keep_alive: u16,
     /// clean (or) persistent session
     clean_session: bool,
     /// client identifier
-    client_id: String,
+    client_id: Arc<String>,
     /// username and password
-    credentials: Option<(String, String)>,
+    credentials: Option<(Arc<String>, Arc<String>)>,
     /// maximum incoming packet size (verifies remaining length of the packet)
     max_incoming_packet_size: usize,
     /// Maximum outgoing packet size (only verifies publish payload size)
@@ -52,7 +53,7 @@ pub struct MqttOptions {
 }
 
 impl MqttOptions {
-    pub fn new<S: Into<String>, T: Into<String>>(id: S, host: T, port: u16) -> MqttOptions {
+    pub fn new<S: Into<Arc<String>>, T: Into<String>>(id: S, host: T, port: u16) -> MqttOptions {
         let id = id.into();
         if id.starts_with(' ') || id.is_empty() {
             panic!("Invalid client id");
@@ -62,7 +63,7 @@ impl MqttOptions {
             broker_addr: host.into(),
             port,
             transport: Transport::Tcp,
-            keep_alive: Duration::from_secs(60),
+            keep_alive: 60,
             clean_session: true,
             client_id: id,
             credentials: None,
@@ -139,20 +140,19 @@ impl MqttOptions {
 
     /// Set number of seconds after which client should ping the broker
     /// if there is no other data exchange
-    pub fn set_keep_alive(&mut self, duration: Duration) -> &mut Self {
-        assert!(duration.as_secs() >= 5, "Keep alives should be >= 5 secs");
-
+    pub fn set_keep_alive(&mut self, duration: u16) -> &mut Self {
+        assert!(duration >= 5, "Keep alives should be >= 5 secs");
         self.keep_alive = duration;
         self
     }
 
     /// Keep alive time
-    pub fn keep_alive(&self) -> Duration {
+    pub fn keep_alive(&self) -> u16 {
         self.keep_alive
     }
 
     /// Client identifier
-    pub fn client_id(&self) -> String {
+    pub fn client_id(&self) -> Arc<String> {
         self.client_id.clone()
     }
 
@@ -185,7 +185,7 @@ impl MqttOptions {
     }
 
     /// Username and password
-    pub fn set_credentials<U: Into<String>, P: Into<String>>(
+    pub fn set_credentials<U: Into<Arc<String>>, P: Into<Arc<String>>>(
         &mut self,
         username: U,
         password: P,
@@ -195,7 +195,7 @@ impl MqttOptions {
     }
 
     /// Security options
-    pub fn credentials(&self) -> Option<(String, String)> {
+    pub fn credentials(&self) -> Option<(Arc<String>, Arc<String>)> {
         self.credentials.clone()
     }
 
