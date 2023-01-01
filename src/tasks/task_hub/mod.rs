@@ -1,6 +1,8 @@
 mod data;
 
-use crate::tasks::task_network::{NetworkData, NetworkMsg, TaskNetwork};
+use crate::tasks::task_network::{
+    Data, DataWaitingToBeSend, NetworkMsg, NetworkStaus, TaskNetwork,
+};
 use crate::tasks::{MqttEvent, Senders, UserMsg};
 use crate::utils::Endpoint;
 use crate::v3_1_1::{Client, Connect, MqttOptions};
@@ -27,8 +29,7 @@ pub struct TaskHub {
     senders: Senders,
     state: State,
     rx: mpsc::Receiver<HubMsg>,
-    tx_for_connect: mpsc::Sender<Connected>,
-    rx_from_connect: mpsc::Receiver<Connected>,
+    rx_from_network: mpsc::Receiver<NetworkStaus>,
 }
 impl TaskHub {
     pub async fn init(options: MqttOptions) -> (Client, Receiver<MqttEvent>) {
@@ -40,7 +41,7 @@ impl TaskHub {
         let (tx_connect, _) = channel(1024);
 
         let (tx_hub, rx_hub) = mpsc::channel(1024);
-        let (tx_for_connect, rx_from_connect) = mpsc::channel(1024);
+        let (tx_for_network, rx_from_network) = mpsc::channel(1024);
 
         let senders = Senders::init(
             tx_network_write,
@@ -58,14 +59,15 @@ impl TaskHub {
             port,
             senders.clone(),
             rx_network_writer,
+            Arc::new(Connect::new(&options).unwrap()),
+            tx_for_network,
         );
         let hub = Self {
             options,
             senders: senders.clone(),
             rx: rx_hub,
             state: State::default(),
-            rx_from_connect,
-            tx_for_connect,
+            rx_from_network,
         };
         let client = Client::init(senders);
         let event_rx = client.init_receiver();
@@ -105,25 +107,31 @@ impl TaskHub {
                 hub_msg = self.rx.recv() => match hub_msg {
                     Some(msg) => self.deal_hub_msg(msg, a, b, keep_alive_time).await,
                     None => todo!()
+                },
+                network_status = self.rx_from_network.recv() => match network_status {
+                    Some(network_status) => {
+                        self.update_state(network_status.into());
+                    },
+                    None => todo!()
                 }
             }
         }
+    }
+    fn update_state(&mut self, state: State) {
+        debug!("update_state: {:?}", state);
+        self.state = state;
     }
     ///
     async fn try_to_connect(&mut self, keep_alive_time: &mut KeepAliveTime) {
         debug!("try to connect");
         loop {
-            TaskConnect::init(
-                self.options.clone(),
-                self.senders.clone(),
-                self.tx_for_connect.clone(),
-            );
-            match self.rx_from_connect.recv().await {
-                Some(req) => {
-                    self.state = State::Connected;
-
-                    self.init_keep_alive_check(keep_alive_time);
-                    break;
+            match self.rx_from_network.recv().await {
+                Some(status) => {
+                    self.update_state(status.into());
+                    if self.state.is_connected() {
+                        self.init_keep_alive_check(keep_alive_time);
+                        return;
+                    }
                 }
                 None => {
                     error!("");
@@ -153,14 +161,15 @@ impl TaskHub {
                 a.push(id).unwrap();
                 self.init_keep_alive_check(keep_alive_time);
             }
-            HubMsg::Error => {}
             HubMsg::PingSuccess => {
                 self.state = State::Connected;
                 self.init_keep_alive_check(keep_alive_time);
             }
             HubMsg::PingFail => {
-                self.state = State::UnConnected(Reason::PingFail);
-                todo!()
+                self.update_state(State::UnConnected(Reason::PingFail));
+                if self.senders.tx_network.send(Data::Reconnect).await.is_err() {
+                    error!("")
+                }
             }
             HubMsg::KeepAlive(keep_alive) => {
                 if *keep_alive_time == keep_alive {

@@ -4,13 +4,26 @@ use bytes::Bytes;
 use std::ops::Deref;
 use std::sync::Arc;
 
+#[derive(Debug, Clone)]
+/// broadcast network status
+pub enum NetworkStaus {
+    Connected,
+    Disconnect(String),
+}
+
 #[derive(Debug)]
-pub struct NetworkData {
+pub enum Data {
+    NetworkData(DataWaitingToBeSend),
+    Reconnect,
+}
+
+#[derive(Debug)]
+pub struct DataWaitingToBeSend {
     pub(crate) data: Arc<Bytes>,
     pub(crate) receipter: Receipter,
 }
 
-impl NetworkData {
+impl DataWaitingToBeSend {
     pub fn init(data: Arc<Bytes>, receipter: Receipter) -> Self {
         Self { data, receipter }
     }
@@ -19,7 +32,13 @@ impl NetworkData {
     }
 }
 
-impl Deref for NetworkData {
+impl From<DataWaitingToBeSend> for Data {
+    fn from(val: DataWaitingToBeSend) -> Self {
+        Self::NetworkData(val)
+    }
+}
+
+impl Deref for DataWaitingToBeSend {
     type Target = Arc<Bytes>;
 
     fn deref(&self) -> &Self::Target {

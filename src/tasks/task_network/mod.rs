@@ -1,11 +1,14 @@
 use crate::v3_1_1::*;
 use anyhow::Context;
-use bytes::BytesMut;
+use anyhow::Result;
+use bytes::{BufMut, Bytes, BytesMut};
 use log::{debug, error, info, warn};
 use std::io;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, ReadHalf};
 use tokio::net::TcpStream;
+use tokio::select;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::{channel, Sender};
 use tokio::sync::mpsc;
@@ -23,12 +26,16 @@ pub use data::*;
 #[derive(Clone, Debug)]
 enum Command {}
 
+/// duty: 1. tcp connect
+///     2. send connect packet
 pub struct TaskNetwork {
     addr: String,
     port: u16,
+    connect_packet: Arc<Bytes>,
     senders: Senders,
-    sub_task_tx: Sender<Command>,
-    rx: mpsc::Receiver<NetworkData>,
+    is_connected: bool,
+    rx: mpsc::Receiver<Data>,
+    tx: mpsc::Sender<NetworkStaus>,
 }
 
 impl TaskNetwork {
@@ -36,103 +43,136 @@ impl TaskNetwork {
         addr: String,
         port: u16,
         inner_tx: Senders,
-        rx: mpsc::Receiver<NetworkData>,
+        rx: mpsc::Receiver<Data>,
+        connect_packet: Arc<Bytes>,
+        tx: mpsc::Sender<NetworkStaus>,
     ) -> Self {
-        let (sub_task_tx, _) = channel(1024);
         Self {
             addr,
             port,
             senders: inner_tx,
-            sub_task_tx,
             rx,
+            is_connected: false,
+            connect_packet,
+            tx,
         }
     }
     pub fn run(mut self) {
         tokio::spawn(async move {
             debug!("{}: {}", self.addr, self.port);
-            let stream = self.try_connect().await;
-            let (reader, mut writer) = tokio::io::split(stream);
-            SubTaskNetworkReader::init(self.senders.clone(), reader, self.sub_task_tx.clone());
-            let mut buf = BytesMut::with_capacity(1024);
+            self.is_connected = true;
+            let mut buf = BytesMut::with_capacity(10 * 1024);
+            let mut stream = self.try_connect(&mut buf).await;
             loop {
-                match self.rx.recv().await {
-                    Some(val) => {
-                        debug!("{:?}", val);
-                        let Err(e) = writer.write_all(val.as_ref().as_ref()).await else {
-                            // debug!("done");
-                            val.done();
+                if !self.is_connected {
+                    buf = BytesMut::with_capacity(10 * 1024);
+                    stream = self.try_connect(&mut buf).await;
+                }
+                select! {
+                    read = stream.read_buf(&mut buf) => match read  {
+                        Ok(len) => {
+                            if len == 0 {
+                                error!("tcp read 0 size");
+                                self.is_connected = false;
+                                continue;
+                            }
+                            if let Err(e) = self.deal_network_msg(&mut buf, len).await {
+                                error!("{:?}", e);
+                            }
+                        }
+                        Err(e) => {
+                            error!("{:?}", e);
+                            self.is_connected = false;
                             continue;
-                        };
-                        error!("{:?}", e);
-                    }
-                    None => {
-                        error!("None");
-                        break;
+                        }
+
+                    },
+                    val = self.rx.recv() => match val {
+                        Some(val) => {
+                            debug!("{:?}", val);
+                            self.deal_inner_msg(&mut stream, val).await;
+                            continue;
+                        }
+                        None => {
+                            error!("None");
+                            continue;
+                        }
                     }
                 }
             }
         });
     }
 
-    async fn try_connect(&self) -> TcpStream {
-        loop {
-            let Ok(stream) = TcpStream::connect((self.addr.as_str(), self.port))
-                .await else {
-                continue;
-            };
-            info!("tcp connect success");
-            return stream;
+    async fn network_disconnect(&mut self, error: String) {
+        self.is_connected = false;
+        if self.tx.send(NetworkStaus::Disconnect(error)).await.is_err() {
+            error!("");
         }
     }
-}
 
-struct SubTaskNetworkReader {
-    senders: Senders,
-    reader: ReadHalf<TcpStream>,
-    sub_task_tx: Sender<Command>,
-}
-
-impl SubTaskNetworkReader {
-    fn init(senders: Senders, reader: ReadHalf<TcpStream>, sub_task_tx: Sender<Command>) {
-        let reader = Self {
-            senders,
-            reader,
-            sub_task_tx,
-        };
-        tokio::spawn(async move {
-            reader.run().await;
-        });
-    }
-    async fn run(mut self) {
+    async fn deal_network_msg(&mut self, buf: &mut BytesMut, len: usize) -> Result<()> {
+        // todo to optimize
         let max_size = 1024;
-        let mut buf = BytesMut::with_capacity(10 * 1024);
-        // let mut buf = [0u8; 10240];
+        self.parse(buf, max_size).await?;
+        Ok(())
+    }
+    async fn deal_inner_msg(&mut self, stream: &mut TcpStream, msg: Data) {
+        match msg {
+            Data::NetworkData(val) => {
+                let Err(e) = stream.write_all(val.as_ref().as_ref()).await else {
+                    val.done();
+                    return;
+                };
+                error!("{:?}", e);
+                self.network_disconnect(e.to_string()).await;
+            }
+            Data::Reconnect => {
+                self.is_connected = false;
+            }
+        }
+    }
+
+    async fn try_connect(&mut self, buf: &mut BytesMut) -> TcpStream {
         loop {
-            let read = match self.reader.read_buf(&mut buf).await {
-                Ok(len) => len,
+            debug!("tcp connect……");
+            match TcpStream::connect((self.addr.as_str(), self.port)).await {
+                Ok(mut stream) => {
+                    info!("tcp connect success");
+                    if let Err(e) = stream.write_all(self.connect_packet.as_ref()).await {
+                        error!("{:?}", e);
+                    } else {
+                        loop {
+                            match stream.read_buf(buf).await {
+                                Ok(len) => {
+                                    if len == 0 {
+                                        break;
+                                    }
+                                    if let Err(e) = self.deal_network_msg(buf, len).await {
+                                        error!("{:?}", e);
+                                        continue;
+                                    }
+                                    if self.is_connected {
+                                        return stream;
+                                    }
+                                }
+                                Err(e) => {
+                                    error!("{:?}", e);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
                 Err(e) => {
-                    // 测试
                     error!("{:?}", e);
-                    sleep(Duration::from_secs(10)).await;
-                    continue;
                 }
             };
-            if 0 == read {
-                warn!("");
-                // continue;
-                break;
-            }
-            match self.parse(&mut buf, max_size).await {
-                Ok(packet) => {}
-                Err(e) => {
-                    error!("{:?}", e);
-                }
-            }
+            sleep(Duration::from_secs(5)).await;
         }
     }
 
     /// Reads a stream of bytes and extracts next MQTT packet out of it
-    async fn parse(&self, stream: &mut BytesMut, max_size: usize) -> anyhow::Result<()> {
+    async fn parse(&mut self, stream: &mut BytesMut, max_size: usize) -> anyhow::Result<()> {
         let fixed_header = check(stream.iter(), max_size)?;
         let packet = stream.split_to(fixed_header.frame_length());
         let packet_type = fixed_header.packet_type()?;
@@ -163,9 +203,9 @@ impl SubTaskNetworkReader {
         match packet_type {
             // PacketType::Connect => Packet::Connect(Connect::read(fixed_header, packet)?),
             PacketType::ConnAck => {
-                self.senders
-                    .tx_connect
-                    .send(ConnAck::read(fixed_header, packet)?)?;
+                let ack = ConnAck::read(fixed_header, packet)?;
+                self.is_connected = true;
+                self.tx.send(NetworkStaus::Connected).await?;
             }
             PacketType::Publish => {
                 self.tx_publish_rel(Publish::read(fixed_header, packet)?.into())

@@ -14,7 +14,7 @@ pub use task_publish::TaskPublishMg;
 pub use task_subscribe::TaskSubscriber;
 
 use crate::tasks::task_hub::HubMsg;
-use crate::tasks::task_network::NetworkData;
+use crate::tasks::task_network::{Data, DataWaitingToBeSend};
 use crate::tasks::task_publish::PublishMsg;
 use crate::tasks::task_subscribe::SubscribeMsg;
 use crate::v3_1_1::{ConnAck, PingResp};
@@ -24,7 +24,7 @@ use tokio::sync::{mpsc, oneshot};
 
 #[derive(Clone)]
 pub struct Senders {
-    tx_network: mpsc::Sender<NetworkData>,
+    tx_network: mpsc::Sender<Data>,
     tx_publish: mpsc::Sender<PublishMsg>,
     tx_subscribe: Sender<SubscribeMsg>,
     tx_ping: Sender<PingResp>,
@@ -35,7 +35,7 @@ pub struct Senders {
 
 impl Senders {
     pub fn init(
-        tx_network_writer: mpsc::Sender<NetworkData>,
+        tx_network_writer: mpsc::Sender<Data>,
         tx_publisher: mpsc::Sender<PublishMsg>,
         tx_subscriber: Sender<SubscribeMsg>,
         tx_user: Sender<MqttEvent>,
@@ -73,10 +73,13 @@ impl Senders {
     ) -> Result<oneshot::Receiver<Receipt>> {
         let (receipter, rx) = Receipter::default();
         self.tx_network
-            .send(NetworkData {
-                data: bytes.into(),
-                receipter,
-            })
+            .send(
+                DataWaitingToBeSend {
+                    data: bytes.into(),
+                    receipter,
+                }
+                .into(),
+            )
             .await?;
         Ok(rx)
     }

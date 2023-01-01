@@ -1,13 +1,14 @@
+use crate::tasks::task_network::NetworkStaus;
 use crate::v3_1_1::{ConnAck, Connect};
 use bytes::Bytes;
 use std::default::Default;
 use std::sync::Arc;
 use tokio::sync::broadcast::Sender;
+
 #[derive(Debug)]
 pub enum HubMsg {
     RequestId(tokio::sync::oneshot::Sender<u16>),
     RecoverId(u16),
-    Error,
     PingSuccess,
     PingFail,
     KeepAlive(KeepAliveTime),
@@ -59,5 +60,14 @@ impl Default for State {
 impl Default for Reason {
     fn default() -> Self {
         Self::Init
+    }
+}
+
+impl From<NetworkStaus> for State {
+    fn from(status: NetworkStaus) -> Self {
+        match status {
+            NetworkStaus::Connected => Self::Connected,
+            NetworkStaus::Disconnect(error) => Self::UnConnected(Reason::NetworkErr(error)),
+        }
     }
 }
