@@ -1,19 +1,24 @@
 use super::*;
+use anyhow::Result;
 use bytes::{Buf, Bytes};
+use std::sync::Arc;
 
 /// Unsubscribe packet
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Unsubscribe {
     pub pkid: u16,
-    pub topics: Vec<String>,
+    pub topics: Vec<Arc<String>>,
 }
 
 impl Unsubscribe {
-    pub fn new<S: Into<String>>(topic: S) -> Unsubscribe {
-        Unsubscribe {
-            pkid: 0,
+    pub fn new<S: Into<Arc<String>>>(topic: S, pkid: u16) -> Result<Bytes> {
+        let mut bytes = BytesMut::new();
+        let unsubscribe = Unsubscribe {
+            pkid,
             topics: vec![topic.into()],
-        }
+        };
+        unsubscribe.write(&mut bytes)?;
+        Ok(bytes.freeze())
     }
 
     pub fn read(fixed_header: FixedHeader, mut bytes: Bytes) -> Result<Self, Error> {
@@ -27,7 +32,7 @@ impl Unsubscribe {
         while payload_bytes > 0 {
             let topic_filter = read_mqtt_string(&mut bytes)?;
             payload_bytes -= topic_filter.len() + 2;
-            topics.push(topic_filter);
+            topics.push(topic_filter.into());
         }
 
         let unsubscribe = Unsubscribe { pkid, topics };

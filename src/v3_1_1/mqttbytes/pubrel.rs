@@ -1,4 +1,5 @@
 use super::*;
+use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 
 /// QoS2 Publish release, in response to PUBREC packet
@@ -8,8 +9,11 @@ pub struct PubRel {
 }
 
 impl PubRel {
-    pub fn new(pkid: u16) -> PubRel {
-        PubRel { pkid }
+    pub fn new(pkid: u16) -> Result<Bytes> {
+        let packet = PubRel { pkid };
+        let mut bytes = BytesMut::new();
+        packet.write(&mut bytes)?;
+        Ok(bytes.freeze())
     }
 
     fn len(&self) -> usize {

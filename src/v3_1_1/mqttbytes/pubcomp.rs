@@ -1,6 +1,6 @@
 use super::*;
+use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
-
 /// QoS2 Assured publish complete, in response to PUBREL packet
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PubComp {
@@ -8,10 +8,12 @@ pub struct PubComp {
 }
 
 impl PubComp {
-    pub fn new(pkid: u16) -> PubComp {
-        PubComp { pkid }
+    pub fn new(pkid: u16) -> Result<Bytes> {
+        let packet = PubComp { pkid };
+        let mut bytes = BytesMut::new();
+        packet.write(&mut bytes)?;
+        Ok(bytes.freeze())
     }
-
     fn len(&self) -> usize {
         // pkid
         2

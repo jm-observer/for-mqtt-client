@@ -7,7 +7,8 @@ use tokio::sync::broadcast::Receiver;
 
 mod mqttbytes;
 
-use crate::tasks::{MqttEvent, Senders, TaskHub, TaskSubscriber};
+use crate::tasks::task_client::Client;
+use crate::tasks::{MqttEvent, Senders, TaskHub};
 pub use mqttbytes::*;
 
 #[derive(Clone)]
@@ -257,24 +258,5 @@ impl MqttOptions {
 
     pub async fn run(self) -> (Client, Receiver<MqttEvent>) {
         TaskHub::init(self).await
-    }
-}
-
-pub struct Client {
-    tx: Senders,
-}
-
-impl Client {
-    pub fn init(tx: Senders) -> Self {
-        Self { tx }
-    }
-    pub async fn publish(&self, topic: String, qos: QoS, payload: Bytes) {}
-    pub fn subscribe(&self, topic: String, qos: QoS) {
-        TaskSubscriber::init(self.tx.clone(), topic, qos);
-    }
-    pub async fn unsubscribe(&self) {}
-    pub async fn disconnect(&self) {}
-    pub fn init_receiver(&self) -> Receiver<MqttEvent> {
-        self.tx.rx_user()
     }
 }

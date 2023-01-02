@@ -247,7 +247,7 @@ impl TaskNetwork {
     }
 
     async fn tx_publish_rel(&self, msg: PublishMsg) {
-        if self.senders.tx_publish.send(msg).await.is_err() {
+        if self.senders.tx_publish.send(msg).is_err() {
             error!("fail to send publisher");
         }
     }

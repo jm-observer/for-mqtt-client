@@ -1,5 +1,6 @@
 use super::*;
 use bytes::{Buf, Bytes};
+use std::sync::Arc;
 
 /// Publish packet
 #[derive(Clone, PartialEq, Eq)]
@@ -7,37 +8,32 @@ pub struct Publish {
     pub dup: bool,
     pub qos: QoS,
     pub retain: bool,
-    pub topic: String,
-    pub pkid: u16,
+    pub topic: Arc<String>,
+    pub pkid: Option<u16>,
     pub payload: Bytes,
 }
 
 impl Publish {
-    pub fn new<S: Into<String>, P: Into<Bytes>>(topic: S, qos: QoS, payload: P) -> Publish {
+    pub fn new<S: Into<Arc<String>>, P: Into<Bytes>>(
+        topic: S,
+        qos: QoS,
+        payload: P,
+        retain: bool,
+        pkid: Option<u16>,
+    ) -> Publish {
         Publish {
             dup: false,
             qos,
-            retain: false,
-            pkid: 0,
+            retain,
+            pkid,
             topic: topic.into(),
             payload: payload.into(),
         }
     }
 
-    pub fn from_bytes<S: Into<String>>(topic: S, qos: QoS, payload: Bytes) -> Publish {
-        Publish {
-            dup: false,
-            qos,
-            retain: false,
-            pkid: 0,
-            topic: topic.into(),
-            payload,
-        }
-    }
-
     fn len(&self) -> usize {
         let len = 2 + self.topic.len() + self.payload.len();
-        if self.qos != QoS::AtMostOnce && self.pkid != 0 {
+        if self.qos != QoS::AtMostOnce {
             len + 2
         } else {
             len
@@ -51,15 +47,15 @@ impl Publish {
 
         let variable_header_index = fixed_header.fixed_header_len;
         bytes.advance(variable_header_index);
-        let topic = read_mqtt_string(&mut bytes)?;
+        let topic = read_mqtt_string(&mut bytes)?.into();
 
         // Packet identifier exists where QoS > 0
         let pkid = match qos {
-            QoS::AtMostOnce => 0,
-            QoS::AtLeastOnce | QoS::ExactlyOnce => read_u16(&mut bytes)?,
+            QoS::AtMostOnce => None,
+            QoS::AtLeastOnce | QoS::ExactlyOnce => read_u16(&mut bytes)?.into(),
         };
 
-        if qos != QoS::AtMostOnce && pkid == 0 {
+        if qos != QoS::AtMostOnce && pkid.is_none() {
             return Err(Error::PacketIdZero);
         }
 
@@ -86,12 +82,11 @@ impl Publish {
         let count = write_remaining_length(buffer, len)?;
         write_mqtt_string(buffer, self.topic.as_str());
 
-        if self.qos != QoS::AtMostOnce {
-            let pkid = self.pkid;
-            if pkid == 0 {
-                return Err(Error::PacketIdZero);
-            }
-
+        if let Some(pkid) = self.pkid {
+            // let pkid = self.pkid;
+            // if pkid == 0 {
+            //     return Err(Error::PacketIdZero);
+            // }
             buffer.put_u16(pkid);
         }
 
@@ -156,8 +151,8 @@ mod test {
                 dup: false,
                 qos: QoS::AtLeastOnce,
                 retain: false,
-                topic: "a/b".to_owned(),
-                pkid: 10,
+                topic: "a/b".to_owned().into(),
+                pkid: 10.into(),
                 payload: Bytes::from(&payload[..]),
             }
         );
@@ -192,8 +187,8 @@ mod test {
                 dup: false,
                 qos: QoS::AtMostOnce,
                 retain: false,
-                topic: "a/b".to_owned(),
-                pkid: 0,
+                topic: "a/b".to_owned().into(),
+                pkid: 0.into(),
                 payload: Bytes::from(&[0x01, 0x02][..]),
             }
         );
@@ -205,8 +200,8 @@ mod test {
             dup: false,
             qos: QoS::AtLeastOnce,
             retain: false,
-            topic: "a/b".to_owned(),
-            pkid: 10,
+            topic: "a/b".to_owned().into(),
+            pkid: 10.into(),
             payload: Bytes::from(vec![0xF1, 0xF2, 0xF3, 0xF4]),
         };
 
@@ -239,8 +234,8 @@ mod test {
             dup: false,
             qos: QoS::AtMostOnce,
             retain: false,
-            topic: "a/b".to_owned(),
-            pkid: 0,
+            topic: "a/b".to_owned().into(),
+            pkid: 0.into(),
             payload: Bytes::from(vec![0xE1, 0xE2, 0xE3, 0xE4]),
         };
 

@@ -1,22 +1,16 @@
 mod data;
+mod publish_qos_0;
+mod publish_qos_1;
+mod publish_qos_2;
+mod publish_rx_dup_qos_1;
+mod publish_rx_dup_qos_2;
+mod publish_rx_qos_1;
+mod publish_rx_qos_2;
 
-use crate::tasks::Senders;
-use crate::QoS;
-use bytes::Bytes;
 pub use data::*;
-use std::sync::Arc;
-use tokio::spawn;
+pub use publish_qos_0::*;
+pub use publish_qos_1::*;
+pub use publish_qos_2::*;
 
-/// consider the order in which pushlish   are repeated
-pub struct TaskPublishMg {
-    tx: Senders,
-    topic: Arc<String>,
-    qos: QoS,
-    payload: Arc<Bytes>,
-}
-
-impl TaskPublishMg {
-    pub async fn run(self) {
-        spawn(async move {});
-    }
-}
+pub use publish_rx_qos_1::*;
+pub use publish_rx_qos_2::*;

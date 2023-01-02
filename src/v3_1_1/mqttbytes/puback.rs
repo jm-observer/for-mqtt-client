@@ -1,4 +1,5 @@
 use super::*;
+use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 
 /// Acknowledgement to QoS1 publish
@@ -8,8 +9,11 @@ pub struct PubAck {
 }
 
 impl PubAck {
-    pub fn new(pkid: u16) -> PubAck {
-        PubAck { pkid }
+    pub fn new(pkid: u16) -> Result<Bytes> {
+        let packet = PubAck { pkid };
+        let mut bytes = BytesMut::new();
+        packet.write(&mut bytes)?;
+        Ok(bytes.freeze())
     }
 
     fn len(&self) -> usize {

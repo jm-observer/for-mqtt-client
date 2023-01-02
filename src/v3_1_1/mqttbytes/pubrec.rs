@@ -1,6 +1,6 @@
 use super::*;
+use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
-
 /// Acknowledgement to QoS2 publish
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PubRec {
@@ -8,10 +8,12 @@ pub struct PubRec {
 }
 
 impl PubRec {
-    pub fn new(pkid: u16) -> PubRec {
-        PubRec { pkid }
+    pub fn new(pkid: u16) -> Result<Bytes> {
+        let packet = PubRec { pkid };
+        let mut bytes = BytesMut::new();
+        packet.write(&mut bytes)?;
+        Ok(bytes.freeze())
     }
-
     fn len(&self) -> usize {
         // pkid
         2

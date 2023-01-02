@@ -2,7 +2,7 @@ mod data;
 
 use crate::tasks::task_network::{Data, NetworkStaus, TaskNetwork};
 use crate::tasks::{MqttEvent, Senders};
-use crate::v3_1_1::{Client, Connect, MqttOptions};
+use crate::v3_1_1::{qos, Connect, MqttOptions};
 use anyhow::Result;
 use log::{debug, error};
 use ringbuf::{Consumer, Producer};
@@ -14,8 +14,12 @@ use tokio::sync::mpsc;
 use tokio::time::sleep;
 use tokio::{select, spawn};
 
+use crate::tasks::task_client::Client;
 use crate::tasks::task_hub::data::{KeepAliveTime, Reason, State};
 use crate::tasks::task_ping::TaskPing;
+use crate::tasks::task_publish::{TaskPublishQos0, TaskPublishQos1, TaskPublishQos2};
+use crate::tasks::task_subscribe::{TaskSubscribe, TaskUnsubscribe};
+use crate::QoS;
 pub use data::HubMsg;
 
 type SharedRb = ringbuf::SharedRb<u16, Vec<MaybeUninit<u16>>>;
@@ -31,7 +35,7 @@ impl TaskHub {
     pub async fn init(options: MqttOptions) -> (Client, Receiver<MqttEvent>) {
         let (tx_user, _) = channel(1024);
         let (tx_network_write, rx_network_writer) = mpsc::channel(1024);
-        let (tx_publish, rx_publisher) = mpsc::channel(1024);
+        let (tx_publish, rx_publisher) = channel(1024);
         let (tx_subscribe, _) = channel(1024);
         let (tx_ping, _) = channel(1024);
         let (tx_connect, _) = channel(1024);
@@ -144,14 +148,6 @@ impl TaskHub {
         keep_alive_time: &mut KeepAliveTime,
     ) {
         match req {
-            HubMsg::RequestId(req) => {
-                if let Some(id) = b.pop() {
-                    debug!("request id: {}", id);
-                    req.send(id).unwrap();
-                } else {
-                    todo!()
-                }
-            }
             HubMsg::RecoverId(id) => {
                 debug!("recover id: {}", id);
                 a.push(id).unwrap();
@@ -173,6 +169,56 @@ impl TaskHub {
                     TaskPing::init(self.senders.clone());
                 }
             }
+            HubMsg::Subscribe { topic, qos } => {
+                TaskSubscribe::init(self.senders.clone(), topic, qos, self.request_id(b).await);
+            }
+            HubMsg::Publish {
+                topic,
+                qos,
+                payload,
+                retain,
+            } => match qos {
+                QoS::AtMostOnce => {
+                    TaskPublishQos0::init(self.senders.clone(), topic.into(), payload, qos, retain)
+                        .await;
+                }
+                QoS::AtLeastOnce => {
+                    let pkid = self.request_id(b).await;
+                    TaskPublishQos1::init(
+                        self.senders.clone(),
+                        topic.into(),
+                        payload,
+                        qos,
+                        retain,
+                        pkid,
+                    )
+                    .await;
+                }
+                QoS::ExactlyOnce => {
+                    let pkid = self.request_id(b).await;
+                    TaskPublishQos2::init(
+                        self.senders.clone(),
+                        topic.into(),
+                        payload,
+                        qos,
+                        retain,
+                        pkid,
+                    )
+                    .await;
+                }
+            },
+            HubMsg::Unsubscribe { topic } => {
+                TaskUnsubscribe::init(self.senders.clone(), topic, self.request_id(b).await);
+            }
+            HubMsg::Disconnect => {}
+        }
+    }
+    async fn request_id(&mut self, b: &mut Consumer<u16, Arc<SharedRb>>) -> u16 {
+        if let Some(id) = b.pop() {
+            debug!("request id: {}", id);
+            return id;
+        } else {
+            todo!()
         }
     }
     /// 初始化一个keep alive的计时

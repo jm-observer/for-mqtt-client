@@ -1,13 +1,29 @@
 use crate::tasks::task_network::NetworkStaus;
+use crate::QoS;
+use bytes::Bytes;
 use std::default::Default;
 
 #[derive(Debug)]
 pub enum HubMsg {
-    RequestId(tokio::sync::oneshot::Sender<u16>),
+    // RequestId(tokio::sync::oneshot::Sender<u16>),
     RecoverId(u16),
     PingSuccess,
     PingFail,
     KeepAlive(KeepAliveTime),
+    Subscribe {
+        topic: String,
+        qos: QoS,
+    },
+    Publish {
+        topic: String,
+        qos: QoS,
+        payload: Bytes,
+        retain: bool,
+    },
+    Unsubscribe {
+        topic: String,
+    },
+    Disconnect,
 }
 
 #[derive(Debug, Clone)]

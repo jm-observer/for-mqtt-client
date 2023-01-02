@@ -19,15 +19,17 @@ pub enum Data {
 #[derive(Debug)]
 pub struct DataWaitingToBeSend {
     pub(crate) data: Arc<Bytes>,
-    pub(crate) receipter: Receipter,
+    pub(crate) receipter: Option<Receipter>,
 }
 
 impl DataWaitingToBeSend {
-    pub fn init(data: Arc<Bytes>, receipter: Receipter) -> Self {
+    pub fn init(data: Arc<Bytes>, receipter: Option<Receipter>) -> Self {
         Self { data, receipter }
     }
     pub fn done(self) {
-        self.receipter.done();
+        if let Some(receipter) = self.receipter {
+            receipter.done();
+        }
     }
 }
 
