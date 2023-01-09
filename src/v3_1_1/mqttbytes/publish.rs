@@ -20,15 +20,20 @@ impl Publish {
         payload: P,
         retain: bool,
         pkid: Option<u16>,
-    ) -> Publish {
-        Publish {
+    ) -> Result<Publish, Error> {
+        let payload = payload.into();
+        let topic = topic.into();
+        if payload.len() + 4 + topic.len() > 268_435_455 {
+            return Err(Error::PayloadTooLong);
+        };
+        Ok(Publish {
             dup: false,
             qos,
             retain,
             pkid,
             topic: topic.into(),
             payload: payload.into(),
-        }
+        })
     }
 
     fn len(&self) -> usize {
@@ -71,7 +76,7 @@ impl Publish {
         Ok(publish)
     }
 
-    pub fn write(&self, buffer: &mut BytesMut) -> Result<usize, Error> {
+    pub fn write(&self, buffer: &mut BytesMut) -> usize {
         let len = self.len();
 
         let dup = self.dup as u8;
@@ -79,7 +84,7 @@ impl Publish {
         let retain = self.retain as u8;
         buffer.put_u8(0b0011_0000 | retain | qos << 1 | dup << 3);
 
-        let count = write_remaining_length(buffer, len)?;
+        let count = write_remaining_length(buffer, len);
         write_mqtt_string(buffer, self.topic.as_str());
 
         if let Some(pkid) = self.pkid {
@@ -93,7 +98,7 @@ impl Publish {
         buffer.extend_from_slice(&self.payload);
 
         // TODO: Returned length is wrong in other packets. Fix it
-        Ok(1 + count + len)
+        1 + count + len
     }
 }
 

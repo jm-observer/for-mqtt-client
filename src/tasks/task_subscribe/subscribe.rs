@@ -30,8 +30,11 @@ impl TaskSubscribe {
     }
     async fn run(&mut self) {
         debug!("start to subscribe");
-        let subscribe =
-            Arc::new(Subscribe::new(self.topic.clone(), self.qos.clone(), self.pkid).unwrap());
+        let subscribe = Arc::new(Subscribe::new(
+            self.topic.clone(),
+            self.qos.clone(),
+            self.pkid,
+        ));
         let mut rx_ack = self.tx.tx_subscribe.subscribe();
         let rx = self.tx.tx_network_default(subscribe.clone()).await.unwrap();
         rx.await.unwrap();

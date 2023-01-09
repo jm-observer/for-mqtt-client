@@ -11,14 +11,14 @@ pub struct Unsubscribe {
 }
 
 impl Unsubscribe {
-    pub fn new<S: Into<Arc<String>>>(topic: S, pkid: u16) -> Result<Bytes> {
+    pub fn new<S: Into<Arc<String>>>(topic: S, pkid: u16) -> Bytes {
         let mut bytes = BytesMut::new();
         let unsubscribe = Unsubscribe {
             pkid,
             topics: vec![topic.into()],
         };
-        unsubscribe.write(&mut bytes)?;
-        Ok(bytes.freeze())
+        unsubscribe.write(&mut bytes);
+        bytes.freeze()
     }
 
     pub fn read(fixed_header: FixedHeader, mut bytes: Bytes) -> Result<Self, Error> {
@@ -39,16 +39,16 @@ impl Unsubscribe {
         Ok(unsubscribe)
     }
 
-    pub fn write(&self, payload: &mut BytesMut) -> Result<usize, Error> {
+    pub fn write(&self, payload: &mut BytesMut) -> usize {
         let remaining_len = 2 + self.topics.iter().fold(0, |s, topic| s + topic.len() + 2);
 
         payload.put_u8(0xA2);
-        let remaining_len_bytes = write_remaining_length(payload, remaining_len)?;
+        let remaining_len_bytes = write_remaining_length(payload, remaining_len);
         payload.put_u16(self.pkid);
 
         for topic in self.topics.iter() {
             write_mqtt_string(payload, topic.as_str());
         }
-        Ok(1 + remaining_len_bytes + remaining_len)
+        1 + remaining_len_bytes + remaining_len
     }
 }

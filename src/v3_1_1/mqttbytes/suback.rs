@@ -37,10 +37,10 @@ impl SubAck {
         Ok(suback)
     }
 
-    pub fn write(&self, buffer: &mut BytesMut) -> Result<usize, Error> {
+    pub fn write(&self, buffer: &mut BytesMut) -> usize {
         buffer.put_u8(0x90);
         let remaining_len = self.len();
-        let remaining_len_bytes = write_remaining_length(buffer, remaining_len)?;
+        let remaining_len_bytes = write_remaining_length(buffer, remaining_len);
 
         buffer.put_u16(self.pkid);
         let p: Vec<u8> = self
@@ -52,7 +52,7 @@ impl SubAck {
             })
             .collect();
         buffer.extend_from_slice(&p);
-        Ok(1 + remaining_len_bytes + remaining_len)
+        1 + remaining_len_bytes + remaining_len
     }
 }
 

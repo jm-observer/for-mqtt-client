@@ -357,10 +357,11 @@ fn write_mqtt_string(stream: &mut BytesMut, string: &str) {
 }
 
 /// Writes remaining length to stream and returns number of bytes for remaining length
-fn write_remaining_length(stream: &mut BytesMut, len: usize) -> Result<usize, Error> {
-    if len > 268_435_455 {
-        return Err(Error::PayloadTooLong);
-    }
+fn write_remaining_length(stream: &mut BytesMut, len: usize) -> usize {
+    // only publish packet should be limited and limited at new function now.
+    // if len > 268_435_455 {
+    //     return Err(Error::PayloadTooLong);
+    // }
 
     let mut done = false;
     let mut x = len;
@@ -377,8 +378,7 @@ fn write_remaining_length(stream: &mut BytesMut, len: usize) -> Result<usize, Er
         count += 1;
         done = x == 0;
     }
-
-    Ok(count)
+    count
 }
 
 /// Maps a number to QoS

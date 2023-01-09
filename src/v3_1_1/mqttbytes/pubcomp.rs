@@ -8,11 +8,11 @@ pub struct PubComp {
 }
 
 impl PubComp {
-    pub fn new(pkid: u16) -> Result<Bytes> {
+    pub fn new(pkid: u16) -> Bytes {
         let packet = PubComp { pkid };
         let mut bytes = BytesMut::new();
-        packet.write(&mut bytes)?;
-        Ok(bytes.freeze())
+        packet.write(&mut bytes);
+        bytes.freeze()
     }
     fn len(&self) -> usize {
         // pkid
@@ -37,11 +37,11 @@ impl PubComp {
         Ok(puback)
     }
 
-    pub fn write(&self, buffer: &mut BytesMut) -> Result<usize, Error> {
+    pub fn write(&self, buffer: &mut BytesMut) -> usize {
         let len = self.len();
         buffer.put_u8(0x70);
-        let count = write_remaining_length(buffer, len)?;
+        let count = write_remaining_length(buffer, len);
         buffer.put_u16(self.pkid);
-        Ok(1 + count + len)
+        1 + count + len
     }
 }

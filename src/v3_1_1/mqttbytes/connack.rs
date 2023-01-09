@@ -56,15 +56,15 @@ impl ConnAck {
         Ok(connack)
     }
 
-    pub fn write(&self, buffer: &mut BytesMut) -> Result<usize, Error> {
+    pub fn write(&self, buffer: &mut BytesMut) -> usize {
         let len = self.len();
         buffer.put_u8(0x20);
 
-        let count = write_remaining_length(buffer, len)?;
+        let count = write_remaining_length(buffer, len);
         buffer.put_u8(self.session_present as u8);
         buffer.put_u8(self.code as u8);
 
-        Ok(1 + count + len)
+        1 + count + len
     }
 }
 

@@ -22,7 +22,7 @@ pub struct Connect {
 }
 
 impl Connect {
-    pub fn new(option: &MqttOptions) -> Result<Bytes> {
+    pub fn new(option: &MqttOptions) -> Bytes {
         let login = match &option.credentials {
             None => None,
             Some((user, password)) => Some(Login::new(user.clone(), password.clone())),
@@ -36,8 +36,8 @@ impl Connect {
             login,
         };
         let mut bytes = BytesMut::new();
-        packet.write(&mut bytes)?;
-        Ok(bytes.freeze())
+        packet.write(&mut bytes);
+        bytes.freeze()
     }
 
     pub fn set_login<U: Into<Arc<String>>, P: Into<Arc<String>>>(
@@ -112,10 +112,10 @@ impl Connect {
         Ok(connect)
     }
 
-    pub fn write(&self, buffer: &mut BytesMut) -> Result<usize, Error> {
+    pub fn write(&self, buffer: &mut BytesMut) -> usize {
         let len = self.len();
         buffer.put_u8(0b0001_0000);
-        let count = write_remaining_length(buffer, len)?;
+        let count = write_remaining_length(buffer, len);
         write_mqtt_string(buffer, "MQTT");
 
         match self.protocol {
@@ -135,7 +135,7 @@ impl Connect {
         write_mqtt_string(buffer, &self.client_id);
 
         if let Some(last_will) = &self.last_will {
-            connect_flags |= last_will.write(buffer)?;
+            connect_flags |= last_will.write(buffer);
         }
 
         if let Some(login) = &self.login {
@@ -144,7 +144,7 @@ impl Connect {
 
         // update connect flags
         buffer[flags_index] = connect_flags;
-        Ok(len)
+        len
     }
 }
 
@@ -200,7 +200,7 @@ impl LastWill {
         Ok(last_will)
     }
 
-    fn write(&self, buffer: &mut BytesMut) -> Result<u8, Error> {
+    fn write(&self, buffer: &mut BytesMut) -> u8 {
         let mut connect_flags = 0;
 
         connect_flags |= 0x04 | (self.qos as u8) << 3;
@@ -210,7 +210,7 @@ impl LastWill {
 
         write_mqtt_string(buffer, &self.topic);
         write_mqtt_bytes(buffer, &self.message);
-        Ok(connect_flags)
+        connect_flags
     }
 }
 

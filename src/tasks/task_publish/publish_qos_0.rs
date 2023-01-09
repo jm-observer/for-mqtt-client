@@ -36,9 +36,10 @@ impl TaskPublishQos0 {
             self.payload.clone(),
             self.retain,
             None,
-        );
+        )
+        .unwrap();
         let mut bytes = BytesMut::new();
-        packet.write(&mut bytes).unwrap();
+        packet.write(&mut bytes);
         let data = bytes.freeze();
         let rx = self.tx.tx_network_default(data).await.unwrap();
         rx.await.unwrap();

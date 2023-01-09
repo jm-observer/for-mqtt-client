@@ -20,7 +20,7 @@ impl TaskPublishRxDupQos1 {
         });
     }
     async fn run(&mut self) {
-        let data = PubAck::new(self.pkid).unwrap();
+        let data = PubAck::new(self.pkid);
         self.tx.tx_network_without_receipt(data).await.unwrap();
         debug!("rx dup publish qos 1 success");
     }

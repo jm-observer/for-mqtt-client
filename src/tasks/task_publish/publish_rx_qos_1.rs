@@ -29,7 +29,7 @@ impl TaskPublishRxQos1 {
         });
     }
     async fn run(&mut self) {
-        let data = PubAck::new(self.pkid).unwrap();
+        let data = PubAck::new(self.pkid);
         self.tx.tx_network_without_receipt(data).await.unwrap();
         // todo send publish to user or hub
         debug!("rx publish qos 1 success");

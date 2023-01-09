@@ -11,7 +11,7 @@ pub struct Subscribe {
 }
 
 impl Subscribe {
-    pub fn new<S: Into<Arc<String>>>(path: S, qos: QoS, pkid: u16) -> Result<Bytes> {
+    pub fn new<S: Into<Arc<String>>>(path: S, qos: QoS, pkid: u16) -> Bytes {
         let filter = SubscribeFilter {
             path: path.into(),
             qos,
@@ -21,8 +21,8 @@ impl Subscribe {
             pkid,
             filters: vec![filter],
         };
-        subscribe.write(&mut bytes)?;
-        Ok(bytes.freeze())
+        subscribe.write(&mut bytes);
+        bytes.freeze()
     }
 
     pub fn new_many<T>(topics: T) -> Subscribe
@@ -75,13 +75,13 @@ impl Subscribe {
         }
     }
 
-    pub fn write(&self, buffer: &mut BytesMut) -> Result<usize, Error> {
+    pub fn write(&self, buffer: &mut BytesMut) -> usize {
         // write packet type
         buffer.put_u8(0x82);
 
         // write remaining length
         let remaining_len = self.len();
-        let remaining_len_bytes = write_remaining_length(buffer, remaining_len)?;
+        let remaining_len_bytes = write_remaining_length(buffer, remaining_len);
 
         // write packet id
         buffer.put_u16(self.pkid);
@@ -91,7 +91,7 @@ impl Subscribe {
             filter.write(buffer);
         }
 
-        Ok(1 + remaining_len_bytes + remaining_len)
+        1 + remaining_len_bytes + remaining_len
     }
 }
 

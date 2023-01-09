@@ -31,7 +31,7 @@ impl TaskPublishRxQos2 {
     }
     async fn run(&mut self) {
         let mut rx_ack = self.tx.tx_publish.subscribe();
-        let data = Arc::new(PubRec::new(self.pkid).unwrap());
+        let data = Arc::new(PubRec::new(self.pkid));
         let rx = self.tx.tx_network_default(data).await.unwrap();
         rx.await.unwrap();
 
@@ -40,7 +40,7 @@ impl TaskPublishRxQos2 {
                 Ok(ack) => match ack {
                     PublishMsg::PubRel(ack) => {
                         if ack.pkid == self.pkid {
-                            let data = PubComp::new(self.pkid).unwrap();
+                            let data = PubComp::new(self.pkid);
                             self.tx.tx_network_without_receipt(data).await.unwrap();
                             // todo send publish to hub or user
                         }
@@ -60,7 +60,7 @@ impl TaskPublishRxQos2 {
                 Ok(ack) => match ack {
                     PublishMsg::PubRel(ack) => {
                         if ack.pkid == self.pkid {
-                            let data = PubComp::new(self.pkid).unwrap();
+                            let data = PubComp::new(self.pkid);
                             self.tx.tx_network_without_receipt(data).await.unwrap();
                             // todo send publish to hub or user
                         }

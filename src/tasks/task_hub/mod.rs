@@ -59,7 +59,7 @@ impl TaskHub {
             port,
             senders.clone(),
             rx_network_writer,
-            Arc::new(Connect::new(&options).unwrap()),
+            Arc::new(Connect::new(&options)),
             tx_for_network,
         );
         let hub = Self {
