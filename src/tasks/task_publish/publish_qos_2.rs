@@ -1,8 +1,10 @@
 use crate::tasks::task_hub::HubMsg;
 use crate::tasks::task_publish::PublishMsg;
-use crate::tasks::Senders;
+use crate::tasks::utils::complete_to_tx_packet;
+use crate::tasks::{Senders, TIMEOUT_TO_COMPLETE_TX};
 use crate::v3_1_1::{PubRel, Publish};
-use crate::QoS;
+use crate::{QoS, QoSWithPacketId};
+use anyhow::Result;
 use bytes::{Bytes, BytesMut};
 use log::debug;
 use std::sync::Arc;
@@ -14,9 +16,8 @@ pub struct TaskPublishQos2 {
     tx: Senders,
     topic: Arc<String>,
     payload: Bytes,
-    qos: QoS,
     retain: bool,
-    pkid: u16,
+    packet_id: u16,
 }
 
 impl TaskPublishQos2 {
@@ -24,76 +25,51 @@ impl TaskPublishQos2 {
         tx: Senders,
         topic: Arc<String>,
         payload: Bytes,
-        qos: QoS,
         retain: bool,
-        pkid: u16,
+        packet_id: u16,
     ) {
         spawn(async move {
             let mut publish = Self {
                 tx,
                 topic,
                 payload,
-                qos,
                 retain,
-                pkid,
+                packet_id,
             };
-            publish.run().await;
+            publish.run().await.unwrap();
         });
     }
-    async fn run(&mut self) {
+    async fn run(&mut self) -> Result<()> {
         debug!("start to Publish");
-        let packet = Publish::new(
+        let mut data = Publish::new(
             self.topic.clone(),
-            self.qos.clone(),
+            QoSWithPacketId::ExactlyOnce(self.packet_id),
             self.payload.clone(),
             self.retain,
-            Some(self.pkid),
+        )?;
+        let mut rx_ack = self.tx.broadcast_tx.tx_pub_rec.subscribe();
+        complete_to_tx_packet(
+            &mut rx_ack,
+            self.packet_id,
+            TIMEOUT_TO_COMPLETE_TX,
+            &self.tx,
+            &mut data,
         )
-        .unwrap();
-        let mut bytes = BytesMut::new();
-        let mut rx_ack = self.tx.tx_publish.subscribe();
-        packet.write(&mut bytes);
-        let data = bytes.freeze();
-        let rx = self.tx.tx_network_default(data).await.unwrap();
-        rx.await.unwrap();
-        let mut state = StateQos2::WaitRec;
-        loop {
-            match rx_ack.recv().await {
-                Ok(ack) => match state {
-                    StateQos2::WaitRec => match ack {
-                        PublishMsg::PubRec(ack) => {
-                            if ack.pkid == self.pkid {
-                                debug!("wait for comp...");
-                                state = StateQos2::WaitComp;
-                                let data = PubRel::new(self.pkid);
-                                let rx = self.tx.tx_network_default(data).await.unwrap();
-                                rx.await.unwrap();
-                            }
-                        }
-                        _ => {}
-                    },
-                    StateQos2::WaitComp => match ack {
-                        PublishMsg::PubComp(ack) => {
-                            if ack.pkid == self.pkid {
-                                debug!("publish qos 2 success");
-                                self.tx
-                                    .tx_hub
-                                    .send(HubMsg::RecoverId(self.pkid))
-                                    .await
-                                    .unwrap();
-                                return;
-                            }
-                        }
-                        _ => {}
-                    },
-                },
-                Err(e) => {}
-            }
-        }
+        .await?;
+        let mut data = PubRel::new(self.packet_id);
+        let mut rx_ack = self.tx.broadcast_tx.tx_pub_comp.subscribe();
+        complete_to_tx_packet(
+            &mut rx_ack,
+            self.packet_id,
+            TIMEOUT_TO_COMPLETE_TX,
+            &self.tx,
+            &mut data,
+        )
+        .await?;
+        self.tx
+            .tx_hub
+            .send(HubMsg::RecoverId(self.packet_id))
+            .await?;
+        Ok(())
     }
-}
-
-enum StateQos2 {
-    WaitRec,
-    WaitComp,
 }

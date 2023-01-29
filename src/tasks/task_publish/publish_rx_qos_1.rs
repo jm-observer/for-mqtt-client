@@ -1,6 +1,8 @@
+use crate::tasks::task_hub::HubMsg;
 use crate::tasks::Senders;
 use crate::v3_1_1::{PubAck, Publish};
 use crate::QoS;
+use anyhow::Result;
 use bytes::{Bytes, BytesMut};
 use log::debug;
 use std::sync::Arc;
@@ -9,29 +11,23 @@ use tokio::spawn;
 /// consider the order in which pushlish   are repeated
 pub struct TaskPublishRxQos1 {
     tx: Senders,
-    topic: Arc<String>,
-    payload: Bytes,
-    qos: QoS,
-    pkid: u16,
+    packet_id: u16,
 }
 
 impl TaskPublishRxQos1 {
-    pub async fn init(tx: Senders, topic: Arc<String>, payload: Bytes, qos: QoS, pkid: u16) {
+    pub fn init(tx: Senders, packet_id: u16) {
         spawn(async move {
-            let mut publish = Self {
-                tx,
-                topic,
-                payload,
-                qos,
-                pkid,
-            };
-            publish.run().await;
+            let mut publish = Self { tx, packet_id };
+            publish.run().await.unwrap();
         });
     }
-    async fn run(&mut self) {
-        let data = PubAck::new(self.pkid);
-        self.tx.tx_network_without_receipt(data).await.unwrap();
-        // todo send publish to user or hub
-        debug!("rx publish qos 1 success");
+    async fn run(&mut self) -> Result<()> {
+        let data = PubAck::data(self.packet_id);
+        self.tx.tx_network_default(data).await?;
+        self.tx
+            .tx_hub
+            .send(HubMsg::RecoverRxId(self.packet_id))
+            .await?;
+        Ok(())
     }
 }

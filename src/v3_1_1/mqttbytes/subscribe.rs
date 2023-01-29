@@ -6,19 +6,30 @@ use std::sync::Arc;
 /// Subscription packet
 #[derive(Clone, PartialEq, Eq)]
 pub struct Subscribe {
-    pub pkid: u16,
+    pub packet_id: u16,
     pub filters: Vec<SubscribeFilter>,
 }
 
 impl Subscribe {
-    pub fn new<S: Into<Arc<String>>>(path: S, qos: QoS, pkid: u16) -> Bytes {
+    pub fn new<S: Into<Arc<String>>>(path: S, qos: QoS, packet_id: u16) -> Self {
+        let filter = SubscribeFilter {
+            path: path.into(),
+            qos,
+        };
+        let mut bytes = BytesMut::new();
+        Subscribe {
+            packet_id,
+            filters: vec![filter],
+        }
+    }
+    pub fn data<S: Into<Arc<String>>>(path: S, qos: QoS, pkid: u16) -> Bytes {
         let filter = SubscribeFilter {
             path: path.into(),
             qos,
         };
         let mut bytes = BytesMut::new();
         let subscribe = Subscribe {
-            pkid,
+            packet_id: pkid,
             filters: vec![filter],
         };
         subscribe.write(&mut bytes);
@@ -31,7 +42,10 @@ impl Subscribe {
     {
         let filters: Vec<SubscribeFilter> = topics.into_iter().collect();
 
-        Subscribe { pkid: 0, filters }
+        Subscribe {
+            packet_id: 0,
+            filters,
+        }
     }
 
     pub fn add(&mut self, path: String, qos: QoS) -> &mut Self {
@@ -71,7 +85,10 @@ impl Subscribe {
 
         match filters.len() {
             0 => Err(Error::EmptySubscription),
-            _ => Ok(Subscribe { pkid, filters }),
+            _ => Ok(Subscribe {
+                packet_id: pkid,
+                filters,
+            }),
         }
     }
 
@@ -84,7 +101,7 @@ impl Subscribe {
         let remaining_len_bytes = write_remaining_length(buffer, remaining_len);
 
         // write packet id
-        buffer.put_u16(self.pkid);
+        buffer.put_u16(self.packet_id);
 
         // write filters
         for filter in self.filters.iter() {
@@ -136,7 +153,7 @@ impl fmt::Debug for Subscribe {
         write!(
             f,
             "Filters = {:?}, Packet id = {:?}",
-            self.filters, self.pkid
+            self.filters, self.packet_id
         )
     }
 }
@@ -191,7 +208,7 @@ mod test {
         assert_eq!(
             packet,
             Subscribe {
-                pkid: 260,
+                packet_id: 260,
                 filters: vec![
                     SubscribeFilter::new("a/+".to_owned(), QoS::AtMostOnce),
                     SubscribeFilter::new("#".to_owned(), QoS::AtLeastOnce),
@@ -204,7 +221,7 @@ mod test {
     #[test]
     fn subscribe_encoding_works() {
         let subscribe = Subscribe {
-            pkid: 260,
+            packet_id: 260,
             filters: vec![
                 SubscribeFilter::new("a/+".to_owned(), QoS::AtMostOnce),
                 SubscribeFilter::new("#".to_owned(), QoS::AtLeastOnce),

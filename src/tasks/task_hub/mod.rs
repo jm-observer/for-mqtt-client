@@ -1,11 +1,12 @@
 mod data;
 
 use crate::tasks::task_network::{Data, NetworkStaus, TaskNetwork};
-use crate::tasks::{MqttEvent, Senders};
-use crate::v3_1_1::{qos, Connect, MqttOptions};
+use crate::tasks::{BroadcastTx, MqttEvent, Senders};
+use crate::v3_1_1::{qos, Connect, MqttOptions, Publish};
 use anyhow::Result;
 use log::{debug, error};
 use ringbuf::{Consumer, Producer};
+use std::collections::HashMap;
 use std::mem::MaybeUninit;
 use std::sync::Arc;
 use std::time::Duration;
@@ -17,9 +18,11 @@ use tokio::{select, spawn};
 use crate::tasks::task_client::Client;
 use crate::tasks::task_hub::data::{KeepAliveTime, Reason, State};
 use crate::tasks::task_ping::TaskPing;
-use crate::tasks::task_publish::{TaskPublishQos0, TaskPublishQos1, TaskPublishQos2};
+use crate::tasks::task_publish::{
+    TaskPublishQos0, TaskPublishQos1, TaskPublishQos2, TaskPublishRxQos1, TaskPublishRxQos2,
+};
 use crate::tasks::task_subscribe::{TaskSubscribe, TaskUnsubscribe};
-use crate::QoS;
+use crate::{QoS, QoSWithPacketId};
 pub use data::HubMsg;
 
 type SharedRb = ringbuf::SharedRb<u16, Vec<MaybeUninit<u16>>>;
@@ -30,28 +33,15 @@ pub struct TaskHub {
     state: State,
     rx: mpsc::Receiver<HubMsg>,
     rx_from_network: mpsc::Receiver<NetworkStaus>,
+    rx_publish: HashMap<u16, Publish>,
 }
 impl TaskHub {
     pub async fn init(options: MqttOptions) -> (Client, Receiver<MqttEvent>) {
-        let (tx_user, _) = channel(1024);
         let (tx_network_write, rx_network_writer) = mpsc::channel(1024);
-        let (tx_publish, rx_publisher) = channel(1024);
-        let (tx_subscribe, _) = channel(1024);
-        let (tx_ping, _) = channel(1024);
-        let (tx_connect, _) = channel(1024);
-
         let (tx_hub, rx_hub) = mpsc::channel(1024);
         let (tx_for_network, rx_from_network) = mpsc::channel(1024);
 
-        let senders = Senders::init(
-            tx_network_write,
-            tx_publish,
-            tx_subscribe,
-            tx_user,
-            tx_hub,
-            tx_ping,
-            tx_connect,
-        );
+        let senders = Senders::init(tx_network_write, tx_hub);
 
         let (addr, port) = options.broker_address();
         let network_task = TaskNetwork::init(
@@ -68,6 +58,7 @@ impl TaskHub {
             rx: rx_hub,
             state: State::default(),
             rx_from_network,
+            rx_publish: HashMap::default(),
         };
         let client = Client::init(senders);
         let event_rx = client.init_receiver();
@@ -188,7 +179,6 @@ impl TaskHub {
                         self.senders.clone(),
                         topic.into(),
                         payload,
-                        qos,
                         retain,
                         pkid,
                     )
@@ -200,7 +190,6 @@ impl TaskHub {
                         self.senders.clone(),
                         topic.into(),
                         payload,
-                        qos,
                         retain,
                         pkid,
                     )
@@ -211,6 +200,32 @@ impl TaskHub {
                 TaskUnsubscribe::init(self.senders.clone(), topic, self.request_id(b).await);
             }
             HubMsg::Disconnect => {}
+            HubMsg::RxPublish(publish) => match publish.qos {
+                QoSWithPacketId::AtMostOnce => {
+                    self.senders.tx_to_user(publish);
+                }
+                QoSWithPacketId::AtLeastOnce(id) => {
+                    if self.rx_publish.contains_key(&id) {
+                        debug!("rx dup publish {:?} from broker", publish)
+                    } else {
+                        TaskPublishRxQos1::init(self.senders.clone(), id);
+                    }
+                }
+                QoSWithPacketId::ExactlyOnce(id) => {
+                    if self.rx_publish.contains_key(&id) {
+                        debug!("rx dup publish {:?} from broker", publish)
+                    } else {
+                        TaskPublishRxQos2::init(self.senders.clone(), id);
+                    }
+                }
+            },
+            HubMsg::RecoverRxId(id) => {
+                if let Some(publish) = self.rx_publish.remove(&id) {
+                    self.senders.tx_to_user(publish);
+                } else {
+                    error!("todo")
+                }
+            }
         }
     }
     async fn request_id(&mut self, b: &mut Consumer<u16, Arc<SharedRb>>) -> u16 {

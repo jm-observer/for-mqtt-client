@@ -1,4 +1,5 @@
 use crate::tasks::task_network::NetworkStaus;
+use crate::v3_1_1::Publish;
 use crate::QoS;
 use bytes::Bytes;
 use std::default::Default;
@@ -20,6 +21,10 @@ pub enum HubMsg {
         payload: Bytes,
         retain: bool,
     },
+    /// 接收从broker发送的publish包
+    RxPublish(Publish),
+    /// 接收的publish已经完成qos流程
+    RecoverRxId(u16),
     Unsubscribe {
         topic: String,
     },

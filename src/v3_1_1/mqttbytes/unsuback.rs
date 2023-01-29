@@ -5,12 +5,12 @@ use crate::v3_1_1::mqttbytes::{read_u16, Error, FixedHeader};
 /// Acknowledgement to unsubscribe
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnsubAck {
-    pub pkid: u16,
+    pub packet_id: u16,
 }
 
 impl UnsubAck {
-    pub fn new(pkid: u16) -> UnsubAck {
-        UnsubAck { pkid }
+    pub fn new(packet_id: u16) -> UnsubAck {
+        UnsubAck { packet_id }
     }
 
     pub fn read(fixed_header: FixedHeader, mut bytes: Bytes) -> Result<Self, Error> {
@@ -21,14 +21,14 @@ impl UnsubAck {
         let variable_header_index = fixed_header.fixed_header_len;
         bytes.advance(variable_header_index);
         let pkid = read_u16(&mut bytes)?;
-        let unsuback = UnsubAck { pkid };
+        let unsuback = UnsubAck { packet_id: pkid };
 
         Ok(unsuback)
     }
 
     pub fn write(&self, payload: &mut BytesMut) -> Result<usize, Error> {
         payload.put_slice(&[0xB0, 0x02]);
-        payload.put_u16(self.pkid);
+        payload.put_u16(self.packet_id);
         Ok(4)
     }
 }

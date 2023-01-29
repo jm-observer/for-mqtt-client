@@ -1,6 +1,6 @@
 use crate::tasks::Senders;
 use crate::v3_1_1::Publish;
-use crate::QoS;
+use crate::{QoS, QoSWithPacketId};
 use bytes::{Bytes, BytesMut};
 use log::debug;
 use std::sync::Arc;
@@ -25,24 +25,22 @@ impl TaskPublishQos0 {
                 qos,
                 retain,
             };
-            publish.run().await;
+            publish.run().await.unwrap();
         });
     }
-    async fn run(&mut self) {
+    async fn run(&mut self) -> anyhow::Result<()> {
         debug!("start to Publish");
         let packet = Publish::new(
             self.topic.clone(),
-            self.qos.clone(),
+            QoSWithPacketId::AtMostOnce,
             self.payload.clone(),
             self.retain,
-            None,
-        )
-        .unwrap();
+        )?;
         let mut bytes = BytesMut::new();
         packet.write(&mut bytes);
         let data = bytes.freeze();
-        let rx = self.tx.tx_network_default(data).await.unwrap();
-        rx.await.unwrap();
+        self.tx.tx_network_default(data).await?;
         debug!("publish qos 0 success");
+        Ok(())
     }
 }

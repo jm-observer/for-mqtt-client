@@ -1,5 +1,7 @@
+use crate::tasks::task_hub::HubMsg;
 use crate::tasks::task_publish::PublishMsg;
-use crate::tasks::Senders;
+use crate::tasks::utils::complete_to_tx_packet;
+use crate::tasks::{Senders, TIMEOUT_TO_COMPLETE_TX};
 use crate::v3_1_1::{PubAck, PubComp, PubRec, Publish};
 use crate::QoS;
 use bytes::{Bytes, BytesMut};
@@ -10,69 +12,33 @@ use tokio::spawn;
 /// consider the order in which pushlish   are repeated
 pub struct TaskPublishRxQos2 {
     tx: Senders,
-    topic: Arc<String>,
-    payload: Bytes,
-    qos: QoS,
-    pkid: u16,
+    packet_id: u16,
 }
 
 impl TaskPublishRxQos2 {
-    pub async fn init(tx: Senders, topic: Arc<String>, payload: Bytes, qos: QoS, pkid: u16) {
+    pub fn init(tx: Senders, packet_id: u16) {
         spawn(async move {
-            let mut publish = Self {
-                tx,
-                topic,
-                payload,
-                qos,
-                pkid,
-            };
-            publish.run().await;
+            let mut publish = Self { tx, packet_id };
+            publish.run().await.unwrap();
         });
     }
-    async fn run(&mut self) {
-        let mut rx_ack = self.tx.tx_publish.subscribe();
-        let data = Arc::new(PubRec::new(self.pkid));
-        let rx = self.tx.tx_network_default(data).await.unwrap();
-        rx.await.unwrap();
-
-        loop {
-            match rx_ack.recv().await {
-                Ok(ack) => match ack {
-                    PublishMsg::PubRel(ack) => {
-                        if ack.pkid == self.pkid {
-                            let data = PubComp::new(self.pkid);
-                            self.tx.tx_network_without_receipt(data).await.unwrap();
-                            // todo send publish to hub or user
-                        }
-                    }
-                    _ => {
-                        // todo conside dup
-                    }
-                },
-                Err(e) => {
-                    error!("{:?}", e);
-                }
-            }
-        }
-
-        loop {
-            match rx_ack.recv().await {
-                Ok(ack) => match ack {
-                    PublishMsg::PubRel(ack) => {
-                        if ack.pkid == self.pkid {
-                            let data = PubComp::new(self.pkid);
-                            self.tx.tx_network_without_receipt(data).await.unwrap();
-                            // todo send publish to hub or user
-                        }
-                    }
-                    _ => {
-                        // todo conside dup
-                    }
-                },
-                Err(e) => {
-                    error!("{:?}", e);
-                }
-            }
-        }
+    async fn run(&mut self) -> anyhow::Result<()> {
+        let mut rx_ack = self.tx.broadcast_tx.tx_pub_rel.subscribe();
+        let mut data = PubRec::new(self.packet_id);
+        complete_to_tx_packet(
+            &mut rx_ack,
+            self.packet_id,
+            TIMEOUT_TO_COMPLETE_TX,
+            &self.tx,
+            &mut data,
+        )
+        .await?;
+        let data = PubComp::data(self.packet_id);
+        self.tx.tx_network_default(data).await?;
+        self.tx
+            .tx_hub
+            .send(HubMsg::RecoverRxId(self.packet_id))
+            .await?;
+        Ok(())
     }
 }

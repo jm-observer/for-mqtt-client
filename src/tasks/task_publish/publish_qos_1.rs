@@ -1,10 +1,13 @@
 use crate::tasks::task_hub::HubMsg;
 use crate::tasks::task_publish::PublishMsg;
-use crate::tasks::Senders;
+use crate::tasks::utils::{complete_to_tx_packet, timeout_rx};
+use crate::tasks::{Senders, TIMEOUT_TO_COMPLETE_TX};
+use crate::traits::packet_rel::PacketRel;
 use crate::v3_1_1::Publish;
-use crate::QoS;
+use crate::{QoS, QoSWithPacketId};
+use anyhow::{bail, Result};
 use bytes::{Bytes, BytesMut};
-use log::debug;
+use log::{debug, warn};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast::error::RecvError;
@@ -17,9 +20,8 @@ pub struct TaskPublishQos1 {
     tx: Senders,
     topic: Arc<String>,
     payload: Bytes,
-    qos: QoS,
+    packet_id: u16,
     retain: bool,
-    pkid: u16,
 }
 
 impl TaskPublishQos1 {
@@ -27,93 +29,42 @@ impl TaskPublishQos1 {
         tx: Senders,
         topic: Arc<String>,
         payload: Bytes,
-        qos: QoS,
         retain: bool,
-        pkid: u16,
+        packet_id: u16,
     ) {
         spawn(async move {
             let mut publish = Self {
                 tx,
                 topic,
                 payload,
-                qos,
                 retain,
-                pkid,
+                packet_id,
             };
-            publish.run().await;
+            publish.run().await.unwrap();
         });
     }
-    async fn run(&mut self) {
+    async fn run(&mut self) -> Result<()> {
         debug!("start to Publish");
-        let packet = Publish::new(
+        let mut packet = Publish::new(
             self.topic.clone(),
-            self.qos.clone(),
+            QoSWithPacketId::AtLeastOnce(self.packet_id),
             self.payload.clone(),
             self.retain,
-            Some(self.pkid),
+        )?;
+        let mut rx_ack = self.tx.broadcast_tx.tx_pub_ack.subscribe();
+        complete_to_tx_packet(
+            &mut rx_ack,
+            self.packet_id,
+            TIMEOUT_TO_COMPLETE_TX,
+            &self.tx,
+            &mut packet,
         )
-        .unwrap();
-        let mut bytes = BytesMut::new();
-        let mut rx_ack = self.tx.tx_publish.subscribe();
-
-        packet.write(&mut bytes);
-        let data = bytes.freeze();
-        let rx = self.tx.tx_network_default(data).await.unwrap();
-        rx.await.unwrap();
-        loop {
-            match rx_ack.recv().await {
-                Ok(ack) => match ack {
-                    PublishMsg::Publish(_) => {}
-                    PublishMsg::PubAck(ack) => {
-                        if ack.pkid == self.pkid {
-                            debug!("publish qos 1 success");
-                            self.tx
-                                .tx_hub
-                                .send(HubMsg::RecoverId(self.pkid))
-                                .await
-                                .unwrap();
-                            return;
-                        }
-                    }
-                    PublishMsg::PubRec(_) => {}
-                    PublishMsg::PubRel(_) => {}
-                    PublishMsg::PubComp(_) => {}
-                },
-                Err(e) => {}
-            }
-        }
-    }
-    async fn timeout_rx(rx_ack: &mut Receiver<PublishMsg>, pkid: u16) -> anyhow::Result<()> {
-        // let timer = &mut timeout(Duration::from_secs(3), sleep(Duration::from_secs(3)));
-        let timer = A::init(Duration::from_secs(3));
-        loop {
-            select! {
-                msg = rx_ack.recv() => match msg? {
-                    PublishMsg::PubAck(ack) => {
-                        if ack.pkid == pkid {
-                            return Ok(());
-                        }
-                    }
-                    _ => {}
-                },
-                _ = timer.sleep() => {
-
-                }
-            }
-        }
-    }
-}
-
-struct A {
-    deadline: Instant,
-}
-
-impl A {
-    fn init(after: Duration) -> Self {
-        let deadline = Instant::now() + after;
-        Self { deadline }
-    }
-    async fn sleep(&self) {
-        sleep_until(self.deadline).await
+        .await?;
+        debug!("publish qos 1 success");
+        self.tx
+            .tx_hub
+            .send(HubMsg::RecoverId(self.packet_id))
+            .await?;
+        Ok(())
     }
 }

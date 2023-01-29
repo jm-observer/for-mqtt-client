@@ -6,19 +6,17 @@ use std::sync::Arc;
 /// Unsubscribe packet
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Unsubscribe {
-    pub pkid: u16,
+    pub packet_id: u16,
     pub topics: Vec<Arc<String>>,
 }
 
 impl Unsubscribe {
-    pub fn new<S: Into<Arc<String>>>(topic: S, pkid: u16) -> Bytes {
+    pub fn new<S: Into<Arc<String>>>(topic: S, packet_id: u16) -> Self {
         let mut bytes = BytesMut::new();
-        let unsubscribe = Unsubscribe {
-            pkid,
+        Unsubscribe {
+            packet_id,
             topics: vec![topic.into()],
-        };
-        unsubscribe.write(&mut bytes);
-        bytes.freeze()
+        }
     }
 
     pub fn read(fixed_header: FixedHeader, mut bytes: Bytes) -> Result<Self, Error> {
@@ -35,7 +33,10 @@ impl Unsubscribe {
             topics.push(topic_filter.into());
         }
 
-        let unsubscribe = Unsubscribe { pkid, topics };
+        let unsubscribe = Unsubscribe {
+            packet_id: pkid,
+            topics,
+        };
         Ok(unsubscribe)
     }
 
@@ -44,7 +45,7 @@ impl Unsubscribe {
 
         payload.put_u8(0xA2);
         let remaining_len_bytes = write_remaining_length(payload, remaining_len);
-        payload.put_u16(self.pkid);
+        payload.put_u16(self.packet_id);
 
         for topic in self.topics.iter() {
             write_mqtt_string(payload, topic.as_str());

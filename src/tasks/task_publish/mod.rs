@@ -2,8 +2,6 @@ mod data;
 mod publish_qos_0;
 mod publish_qos_1;
 mod publish_qos_2;
-mod publish_rx_dup_qos_1;
-mod publish_rx_dup_qos_2;
 mod publish_rx_qos_1;
 mod publish_rx_qos_2;
 

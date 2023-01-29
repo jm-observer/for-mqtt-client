@@ -1,4 +1,5 @@
 use super::*;
+use crate::QoSWithPacketId;
 use bytes::{Buf, Bytes};
 use std::sync::Arc;
 
@@ -6,20 +7,18 @@ use std::sync::Arc;
 #[derive(Clone, PartialEq, Eq)]
 pub struct Publish {
     pub dup: bool,
-    pub qos: QoS,
+    pub qos: QoSWithPacketId,
     pub retain: bool,
     pub topic: Arc<String>,
-    pub pkid: Option<u16>,
     pub payload: Bytes,
 }
 
 impl Publish {
     pub fn new<S: Into<Arc<String>>, P: Into<Bytes>>(
         topic: S,
-        qos: QoS,
+        qos: QoSWithPacketId,
         payload: P,
         retain: bool,
-        pkid: Option<u16>,
     ) -> Result<Publish, Error> {
         let payload = payload.into();
         let topic = topic.into();
@@ -30,7 +29,6 @@ impl Publish {
             dup: false,
             qos,
             retain,
-            pkid,
             topic: topic.into(),
             payload: payload.into(),
         })
@@ -38,7 +36,7 @@ impl Publish {
 
     fn len(&self) -> usize {
         let len = 2 + self.topic.len() + self.payload.len();
-        if self.qos != QoS::AtMostOnce {
+        if self.qos != QoSWithPacketId::AtMostOnce {
             len + 2
         } else {
             len
@@ -55,20 +53,16 @@ impl Publish {
         let topic = read_mqtt_string(&mut bytes)?.into();
 
         // Packet identifier exists where QoS > 0
-        let pkid = match qos {
-            QoS::AtMostOnce => None,
-            QoS::AtLeastOnce | QoS::ExactlyOnce => read_u16(&mut bytes)?.into(),
+        let qos = match qos {
+            QoS::AtMostOnce => QoSWithPacketId::AtMostOnce,
+            QoS::AtLeastOnce => QoSWithPacketId::AtLeastOnce(read_u16(&mut bytes)?),
+            QoS::ExactlyOnce => QoSWithPacketId::ExactlyOnce(read_u16(&mut bytes)?),
         };
-
-        if qos != QoS::AtMostOnce && pkid.is_none() {
-            return Err(Error::PacketIdZero);
-        }
 
         let publish = Publish {
             dup,
             retain,
             qos,
-            pkid,
             topic,
             payload: bytes,
         };
@@ -80,18 +74,14 @@ impl Publish {
         let len = self.len();
 
         let dup = self.dup as u8;
-        let qos = self.qos as u8;
+        let qos = self.qos.qos();
         let retain = self.retain as u8;
         buffer.put_u8(0b0011_0000 | retain | qos << 1 | dup << 3);
 
         let count = write_remaining_length(buffer, len);
         write_mqtt_string(buffer, self.topic.as_str());
 
-        if let Some(pkid) = self.pkid {
-            // let pkid = self.pkid;
-            // if pkid == 0 {
-            //     return Err(Error::PacketIdZero);
-            // }
+        if let Some(pkid) = self.qos.packet_id() {
             buffer.put_u16(pkid);
         }
 
@@ -106,11 +96,10 @@ impl fmt::Debug for Publish {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "Topic = {}, Qos = {:?}, Retain = {}, Pkid = {:?}, Payload Size = {}",
+            "Topic = {}, Qos = {:?}, Retain = {}, Payload Size = {}",
             self.topic,
             self.qos,
             self.retain,
-            self.pkid,
             self.payload.len()
         )
     }

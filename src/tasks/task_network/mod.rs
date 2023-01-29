@@ -182,6 +182,7 @@ impl TaskNetwork {
                 }
                 PacketType::PingResp => {
                     self.senders
+                        .broadcast_tx
                         .tx_ping
                         .send(PingResp)
                         .context("send ping resp fail")?;
@@ -204,39 +205,38 @@ impl TaskNetwork {
                 self.tx.send(NetworkStaus::Connected).await?;
             }
             PacketType::Publish => {
-                self.tx_publish_rel(Publish::read(fixed_header, packet)?.into())
-                    .await;
+                self.tx_publish(Publish::read(fixed_header, packet)?).await;
             }
             PacketType::PubAck => {
-                self.tx_publish_rel(PubAck::read(fixed_header, packet)?.into())
+                self.tx_publish_ack(PubAck::read(fixed_header, packet)?)
                     .await;
             }
             PacketType::PubRec => {
-                self.tx_publish_rel(PubRec::read(fixed_header, packet)?.into())
+                self.tx_publish_rec(PubRec::read(fixed_header, packet)?)
                     .await;
             }
             PacketType::PubRel => {
-                self.tx_publish_rel(PubRel::read(fixed_header, packet)?.into())
+                self.tx_publish_rel(PubRel::read(fixed_header, packet)?)
                     .await;
             }
             PacketType::PubComp => {
-                self.tx_publish_rel(PubComp::read(fixed_header, packet)?.into())
+                self.tx_publish_comp(PubComp::read(fixed_header, packet)?)
                     .await;
             }
             // PacketType::Subscribe => Packet::Subscribe(Subscribe::read(fixed_header, packet)?),
             PacketType::SubAck => {
-                self.tx_subscribe_rel(SubAck::read(fixed_header, packet)?.into())
+                self.tx_sub_ack(SubAck::read(fixed_header, packet)?.into())
                     .await;
             }
             // PacketType::Unsubscribe => Packet::Unsubscribe(Unsubscribe::read(fixed_header, packet)?),
             PacketType::UnsubAck => {
-                self.tx_subscribe_rel(UnsubAck::read(fixed_header, packet)?.into())
+                self.tx_unsub_ack(UnsubAck::read(fixed_header, packet)?.into())
                     .await;
             }
             // PacketType::PingReq => Packet::PingReq,
             PacketType::PingResp => {
                 warn!("PingResp should be zero byte");
-                self.senders.tx_ping.send(PingResp)?;
+                self.senders.broadcast_tx.tx_ping.send(PingResp)?;
             }
             // PacketType::Disconnect => Packet::Disconnect,
             ty => {
@@ -246,13 +246,44 @@ impl TaskNetwork {
         Ok(())
     }
 
-    async fn tx_publish_rel(&self, msg: PublishMsg) {
-        if self.senders.tx_publish.send(msg).is_err() {
+    async fn tx_publish_rel(&self, msg: PubRel) {
+        if self.senders.broadcast_tx.tx_pub_rel.send(msg).is_err() {
             error!("fail to send publisher");
         }
     }
-    async fn tx_subscribe_rel(&self, msg: SubscribeMsg) {
-        if self.senders.tx_subscribe.send(msg).is_err() {
+    async fn tx_publish_ack(&self, msg: PubAck) {
+        if self.senders.broadcast_tx.tx_pub_ack.send(msg).is_err() {
+            error!("fail to send publisher");
+        }
+    }
+    async fn tx_publish_rec(&self, msg: PubRec) {
+        if self.senders.broadcast_tx.tx_pub_rec.send(msg).is_err() {
+            error!("fail to send publisher");
+        }
+    }
+    async fn tx_publish_comp(&self, msg: PubComp) {
+        if self.senders.broadcast_tx.tx_pub_comp.send(msg).is_err() {
+            error!("fail to send publisher");
+        }
+    }
+    async fn tx_publish(&self, msg: Publish) {
+        if self
+            .senders
+            .tx_hub
+            .send(HubMsg::RxPublish(msg))
+            .await
+            .is_err()
+        {
+            error!("fail to send publisher");
+        }
+    }
+    async fn tx_sub_ack(&self, msg: SubAck) {
+        if self.senders.broadcast_tx.tx_sub_ack.send(msg).is_err() {
+            error!("fail to send subscriber");
+        }
+    }
+    async fn tx_unsub_ack(&self, msg: UnsubAck) {
+        if self.senders.broadcast_tx.tx_unsub_ack.send(msg).is_err() {
             error!("fail to send subscriber");
         }
     }

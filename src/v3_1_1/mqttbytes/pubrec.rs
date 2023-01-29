@@ -4,15 +4,12 @@ use bytes::{Buf, BufMut, Bytes, BytesMut};
 /// Acknowledgement to QoS2 publish
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PubRec {
-    pub pkid: u16,
+    pub packet_id: u16,
 }
 
 impl PubRec {
-    pub fn new(pkid: u16) -> Bytes {
-        let packet = PubRec { pkid };
-        let mut bytes = BytesMut::new();
-        packet.write(&mut bytes);
-        bytes.freeze()
+    pub fn new(packet_id: u16) -> Self {
+        Self { packet_id }
     }
     fn len(&self) -> usize {
         // pkid
@@ -24,14 +21,14 @@ impl PubRec {
         bytes.advance(variable_header_index);
         let pkid = read_u16(&mut bytes)?;
         if fixed_header.remaining_len == 2 {
-            return Ok(PubRec { pkid });
+            return Ok(PubRec { packet_id: pkid });
         }
 
         if fixed_header.remaining_len < 4 {
-            return Ok(PubRec { pkid });
+            return Ok(PubRec { packet_id: pkid });
         }
 
-        let puback = PubRec { pkid };
+        let puback = PubRec { packet_id: pkid };
 
         Ok(puback)
     }
@@ -40,7 +37,7 @@ impl PubRec {
         let len = self.len();
         buffer.put_u8(0x50);
         let count = write_remaining_length(buffer, len);
-        buffer.put_u16(self.pkid);
+        buffer.put_u16(self.packet_id);
         1 + count + len
     }
 }

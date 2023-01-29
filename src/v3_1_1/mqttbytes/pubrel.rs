@@ -1,19 +1,17 @@
 use super::*;
 use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
+use std::sync::Arc;
 
 /// QoS2 Publish release, in response to PUBREC packet
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PubRel {
-    pub pkid: u16,
+    pub packet_id: u16,
 }
 
 impl PubRel {
-    pub fn new(pkid: u16) -> Bytes {
-        let packet = PubRel { pkid };
-        let mut bytes = BytesMut::new();
-        packet.write(&mut bytes);
-        bytes.freeze()
+    pub fn new(packet_id: u16) -> Self {
+        Self { packet_id }
     }
 
     fn len(&self) -> usize {
@@ -26,14 +24,14 @@ impl PubRel {
         bytes.advance(variable_header_index);
         let pkid = read_u16(&mut bytes)?;
         if fixed_header.remaining_len == 2 {
-            return Ok(PubRel { pkid });
+            return Ok(PubRel { packet_id: pkid });
         }
 
         if fixed_header.remaining_len < 4 {
-            return Ok(PubRel { pkid });
+            return Ok(PubRel { packet_id: pkid });
         }
 
-        let puback = PubRel { pkid };
+        let puback = PubRel { packet_id: pkid };
 
         Ok(puback)
     }
@@ -42,7 +40,7 @@ impl PubRel {
         let len = self.len();
         buffer.put_u8(0x62);
         let count = write_remaining_length(buffer, len);
-        buffer.put_u16(self.pkid);
+        buffer.put_u16(self.packet_id);
         1 + count + len
     }
 }

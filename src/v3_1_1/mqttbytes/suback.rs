@@ -5,13 +5,16 @@ use std::convert::{TryFrom, TryInto};
 /// Acknowledgement to subscribe
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SubAck {
-    pub pkid: u16,
+    pub packet_id: u16,
     pub return_codes: Vec<SubscribeReasonCode>,
 }
 
 impl SubAck {
-    pub fn new(pkid: u16, return_codes: Vec<SubscribeReasonCode>) -> SubAck {
-        SubAck { pkid, return_codes }
+    pub fn new(packet_id: u16, return_codes: Vec<SubscribeReasonCode>) -> SubAck {
+        SubAck {
+            packet_id,
+            return_codes,
+        }
     }
 
     fn len(&self) -> usize {
@@ -33,7 +36,10 @@ impl SubAck {
             return_codes.push(return_code.try_into()?);
         }
 
-        let suback = SubAck { pkid, return_codes };
+        let suback = SubAck {
+            packet_id: pkid,
+            return_codes,
+        };
         Ok(suback)
     }
 
@@ -42,7 +48,7 @@ impl SubAck {
         let remaining_len = self.len();
         let remaining_len_bytes = write_remaining_length(buffer, remaining_len);
 
-        buffer.put_u16(self.pkid);
+        buffer.put_u16(self.packet_id);
         let p: Vec<u8> = self
             .return_codes
             .iter()
@@ -101,7 +107,7 @@ mod test {
         assert_eq!(
             packet,
             SubAck {
-                pkid: 15,
+                packet_id: 15,
                 return_codes: vec![
                     SubscribeReasonCode::Success(QoS::AtLeastOnce),
                     SubscribeReasonCode::Failure,

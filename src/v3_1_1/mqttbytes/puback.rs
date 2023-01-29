@@ -1,19 +1,20 @@
 use super::*;
 use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
+use std::sync::Arc;
 
 /// Acknowledgement to QoS1 publish
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PubAck {
-    pub pkid: u16,
+    pub packet_id: u16,
 }
 
 impl PubAck {
-    pub fn new(pkid: u16) -> Bytes {
-        let packet = PubAck { pkid };
+    pub fn data(packet_id: u16) -> Arc<Bytes> {
+        let packet = PubAck { packet_id };
         let mut bytes = BytesMut::new();
         packet.write(&mut bytes);
-        bytes.freeze()
+        bytes.freeze().into()
     }
 
     fn len(&self) -> usize {
@@ -28,15 +29,15 @@ impl PubAck {
 
         // No reason code or properties if remaining length == 2
         if fixed_header.remaining_len == 2 {
-            return Ok(PubAck { pkid });
+            return Ok(PubAck { packet_id: pkid });
         }
 
         // No properties len or properties if remaining len > 2 but < 4
         if fixed_header.remaining_len < 4 {
-            return Ok(PubAck { pkid });
+            return Ok(PubAck { packet_id: pkid });
         }
 
-        let puback = PubAck { pkid };
+        let puback = PubAck { packet_id: pkid };
 
         Ok(puback)
     }
@@ -45,7 +46,7 @@ impl PubAck {
         let len = self.len();
         buffer.put_u8(0x40);
         let count = write_remaining_length(buffer, len);
-        buffer.put_u16(self.pkid);
+        buffer.put_u16(self.packet_id);
         1 + count + len
     }
 }
@@ -73,6 +74,6 @@ mod test {
         let ack_bytes = stream.split_to(fixed_header.frame_length()).freeze();
         let packet = PubAck::read(fixed_header, ack_bytes).unwrap();
 
-        assert_eq!(packet, PubAck { pkid: 10 });
+        assert_eq!(packet, PubAck { packet_id: 10 });
     }
 }
