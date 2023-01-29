@@ -12,6 +12,7 @@ use std::sync::Arc;
 pub use task_hub::TaskHub;
 pub use task_subscribe::TaskSubscribe;
 
+use crate::datas::id::Id;
 use crate::tasks::task_hub::HubMsg;
 use crate::tasks::task_network::{Data, DataWaitingToBeSend};
 use crate::tasks::task_publish::PublishMsg;
@@ -142,10 +143,16 @@ pub enum MqttEvent {
     ConnectSuccess,
     ConnectFail(String),
     Publish(Publish),
+    PublishSuccess(u32),
 }
 
 impl From<Publish> for MqttEvent {
     fn from(msg: Publish) -> Self {
         MqttEvent::Publish(msg)
+    }
+}
+impl From<u32> for MqttEvent {
+    fn from(id: u32) -> Self {
+        MqttEvent::PublishSuccess(id)
     }
 }

@@ -1,5 +1,6 @@
 use crate::tasks::Receipter;
 use bytes::Bytes;
+use std::fmt::{Debug, Formatter};
 use std::ops::Deref;
 use std::sync::Arc;
 
@@ -10,10 +11,22 @@ pub enum NetworkStaus {
     Disconnect(String),
 }
 
-#[derive(Debug)]
 pub enum Data {
     NetworkData(DataWaitingToBeSend),
     Reconnect,
+}
+
+impl Debug for Data {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Data::NetworkData(_) => {
+                write!(f, "NetworkData")
+            }
+            Data::Reconnect => {
+                write!(f, "Reconnect")
+            }
+        }
+    }
 }
 
 #[derive(Debug)]

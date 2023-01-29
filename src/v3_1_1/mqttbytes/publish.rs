@@ -1,4 +1,5 @@
 use super::*;
+use crate::datas::payload::Payload;
 use crate::QoSWithPacketId;
 use bytes::{Buf, Bytes};
 use std::sync::Arc;
@@ -10,28 +11,26 @@ pub struct Publish {
     pub qos: QoSWithPacketId,
     pub retain: bool,
     pub topic: Arc<String>,
-    pub payload: Bytes,
+    pub payload: Arc<Payload>,
 }
 
 impl Publish {
-    pub fn new<S: Into<Arc<String>>, P: Into<Bytes>>(
+    pub fn new<S: Into<Arc<String>>, P: Into<Arc<Payload>>>(
         topic: S,
         qos: QoSWithPacketId,
         payload: P,
         retain: bool,
-    ) -> Result<Publish, Error> {
+    ) -> Publish {
         let payload = payload.into();
         let topic = topic.into();
-        if payload.len() + 4 + topic.len() > 268_435_455 {
-            return Err(Error::PayloadTooLong);
-        };
-        Ok(Publish {
+
+        Publish {
             dup: false,
             qos,
             retain,
             topic: topic.into(),
             payload: payload.into(),
-        })
+        }
     }
 
     fn len(&self) -> usize {
@@ -64,7 +63,7 @@ impl Publish {
             retain,
             qos,
             topic,
-            payload: bytes,
+            payload: Arc::new(bytes.into()),
         };
 
         Ok(publish)
@@ -85,7 +84,7 @@ impl Publish {
             buffer.put_u16(pkid);
         }
 
-        buffer.extend_from_slice(&self.payload);
+        buffer.extend_from_slice(&self.payload.as_bytes());
 
         // TODO: Returned length is wrong in other packets. Fix it
         1 + count + len
@@ -96,11 +95,8 @@ impl fmt::Debug for Publish {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "Topic = {}, Qos = {:?}, Retain = {}, Payload Size = {}",
-            self.topic,
-            self.qos,
-            self.retain,
-            self.payload.len()
+            "Topic = {}, Qos = {:?}, Retain = {}, Payload = {:?}",
+            self.topic, self.qos, self.retain, self.payload
         )
     }
 }

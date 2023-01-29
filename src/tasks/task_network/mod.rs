@@ -109,7 +109,22 @@ impl TaskNetwork {
     async fn deal_network_msg(&mut self, buf: &mut BytesMut) -> Result<()> {
         // todo to optimize
         let max_size = 1024;
-        self.parse(buf, max_size).await?;
+        loop {
+            match self.parse(buf, max_size).await {
+                Ok(_) => {
+                    // 处理粘包
+                    if buf.len() >= 2 {
+                        continue;
+                    } else {
+                        break;
+                    }
+                }
+                Err(e) => {
+                    error!("{:?}", e);
+                    break;
+                }
+            }
+        }
         Ok(())
     }
     async fn deal_inner_msg(&mut self, stream: &mut TcpStream, msg: Data) {

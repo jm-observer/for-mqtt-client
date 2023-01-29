@@ -163,37 +163,17 @@ impl TaskHub {
             HubMsg::Subscribe { topic, qos } => {
                 TaskSubscribe::init(self.senders.clone(), topic, qos, self.request_id(b).await);
             }
-            HubMsg::Publish {
-                topic,
-                qos,
-                payload,
-                retain,
-            } => match qos {
+            HubMsg::Publish(trace_publish) => match trace_publish.qos {
                 QoS::AtMostOnce => {
-                    TaskPublishQos0::init(self.senders.clone(), topic.into(), payload, qos, retain)
-                        .await;
+                    TaskPublishQos0::init(self.senders.clone(), trace_publish).await;
                 }
                 QoS::AtLeastOnce => {
                     let pkid = self.request_id(b).await;
-                    TaskPublishQos1::init(
-                        self.senders.clone(),
-                        topic.into(),
-                        payload,
-                        retain,
-                        pkid,
-                    )
-                    .await;
+                    TaskPublishQos1::init(self.senders.clone(), trace_publish, pkid).await;
                 }
                 QoS::ExactlyOnce => {
                     let pkid = self.request_id(b).await;
-                    TaskPublishQos2::init(
-                        self.senders.clone(),
-                        topic.into(),
-                        payload,
-                        retain,
-                        pkid,
-                    )
-                    .await;
+                    TaskPublishQos2::init(self.senders.clone(), trace_publish, pkid).await;
                 }
             },
             HubMsg::Unsubscribe { topic } => {
@@ -208,6 +188,7 @@ impl TaskHub {
                     if self.rx_publish.contains_key(&id) {
                         debug!("rx dup publish {:?} from broker", publish)
                     } else {
+                        self.rx_publish.insert(id, publish);
                         TaskPublishRxQos1::init(self.senders.clone(), id);
                     }
                 }
@@ -215,6 +196,7 @@ impl TaskHub {
                     if self.rx_publish.contains_key(&id) {
                         debug!("rx dup publish {:?} from broker", publish)
                     } else {
+                        self.rx_publish.insert(id, publish);
                         TaskPublishRxQos2::init(self.senders.clone(), id);
                     }
                 }

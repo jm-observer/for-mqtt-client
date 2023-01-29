@@ -1,3 +1,5 @@
+use crate::datas::payload::Payload;
+use crate::datas::trace_publish::TracePublish;
 use crate::tasks::task_hub::HubMsg;
 use crate::tasks::task_publish::PublishMsg;
 use crate::tasks::utils::complete_to_tx_packet;
@@ -14,26 +16,16 @@ use tokio::sync::broadcast::error::RecvError;
 /// consider the order in which pushlish   are repeated
 pub struct TaskPublishQos2 {
     tx: Senders,
-    topic: Arc<String>,
-    payload: Bytes,
-    retain: bool,
+    trace_publish: TracePublish,
     packet_id: u16,
 }
 
 impl TaskPublishQos2 {
-    pub async fn init(
-        tx: Senders,
-        topic: Arc<String>,
-        payload: Bytes,
-        retain: bool,
-        packet_id: u16,
-    ) {
+    pub async fn init(tx: Senders, trace_publish: TracePublish, packet_id: u16) {
         spawn(async move {
             let mut publish = Self {
                 tx,
-                topic,
-                payload,
-                retain,
+                trace_publish,
                 packet_id,
             };
             publish.run().await.unwrap();
@@ -42,11 +34,11 @@ impl TaskPublishQos2 {
     async fn run(&mut self) -> Result<()> {
         debug!("start to Publish");
         let mut data = Publish::new(
-            self.topic.clone(),
+            self.trace_publish.topic.clone(),
             QoSWithPacketId::ExactlyOnce(self.packet_id),
-            self.payload.clone(),
-            self.retain,
-        )?;
+            self.trace_publish.payload.clone(),
+            self.trace_publish.retain,
+        );
         let mut rx_ack = self.tx.broadcast_tx.tx_pub_rec.subscribe();
         complete_to_tx_packet(
             &mut rx_ack,
@@ -70,6 +62,7 @@ impl TaskPublishQos2 {
             .tx_hub
             .send(HubMsg::RecoverId(self.packet_id))
             .await?;
+        self.tx.tx_to_user(self.trace_publish.id());
         Ok(())
     }
 }

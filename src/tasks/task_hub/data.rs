@@ -1,8 +1,11 @@
+use crate::datas::payload::Payload;
+use crate::datas::trace_publish::TracePublish;
 use crate::tasks::task_network::NetworkStaus;
 use crate::v3_1_1::Publish;
 use crate::QoS;
 use bytes::Bytes;
 use std::default::Default;
+use std::sync::Arc;
 
 #[derive(Debug)]
 pub enum HubMsg {
@@ -15,12 +18,7 @@ pub enum HubMsg {
         topic: String,
         qos: QoS,
     },
-    Publish {
-        topic: String,
-        qos: QoS,
-        payload: Bytes,
-        retain: bool,
-    },
+    Publish(TracePublish),
     /// 接收从broker发送的publish包
     RxPublish(Publish),
     /// 接收的publish已经完成qos流程

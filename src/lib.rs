@@ -1,10 +1,13 @@
 #![allow(dead_code, unused_mut, unused_imports, unused_variables)]
 extern crate core;
 
+pub mod datas;
 mod tasks;
 pub mod traits;
 pub mod utils;
 pub mod v3_1_1;
+
+pub use tasks::MqttEvent;
 
 #[derive(Clone)]
 pub enum Transport {

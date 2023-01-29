@@ -2,8 +2,9 @@
 
 use anyhow::Result;
 use for_mqtt_client::v3_1_1::MqttOptions;
-use for_mqtt_client::QoS;
-use log::{debug, error, warn};
+use for_mqtt_client::{MqttEvent, QoS};
+use log::LevelFilter::{Debug, Info};
+use log::{debug, error, info, warn};
 use std::io::Read;
 use std::time::Duration;
 use tokio::spawn;
@@ -11,28 +12,55 @@ use tokio::time::sleep;
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 10)]
 async fn main() -> Result<()> {
-    custom_utils::logger::logger_stdout_debug();
+    custom_utils::logger::custom_build(Info)
+        .module("for_mqtt_client::tasks::task_network", Debug)
+        .module("for_mqtt_client::tasks::task_publish", Debug)
+        .build_default()
+        .log_to_stdout()
+        .start();
     let mut options = MqttOptions::new("abc111".to_string(), "broker.emqx.io".to_string(), 1883);
     options.set_keep_alive(30);
     let (_client, mut event_rx) = options.run().await;
     spawn(async move {
         while let Ok(event) = event_rx.recv().await {
-            debug!("{:?}", event);
+            match event {
+                MqttEvent::ConnectSuccess => {
+                    info!("\nConnectSuccess \n");
+                }
+                MqttEvent::ConnectFail(reason) => {
+                    info!("\nConnectFail：{} \n", reason);
+                }
+                MqttEvent::Publish(packet) => {
+                    info!("\nRx Publish：{:?} \n", packet);
+                }
+                MqttEvent::PublishSuccess(id) => {
+                    info!("\nPublish Success：{} \n", id);
+                }
+            }
         }
         warn!("**************");
     });
     _client
-        .subscribe("abcfew".to_string(), QoS::AtMostOnce)
+        .subscribe("abcfew".to_string(), QoS::ExactlyOnce)
         .await;
     sleep(Duration::from_secs(2)).await;
-    _client
-        .publish(
-            "abcfew".to_string(),
-            QoS::AtLeastOnce,
-            "abc".as_bytes().into(),
-            false,
-        )
-        .await;
+    info!(
+        "{:?}",
+        _client
+            .publish("abcfew".to_string(), QoS::ExactlyOnce, "abc", false)
+            .await
+            .unwrap()
+    );
+    sleep(Duration::from_secs(2)).await;
+    _client.unsubscribe("abcfew".to_string()).await;
+    sleep(Duration::from_secs(2)).await;
+    info!(
+        "{:?}",
+        _client
+            .publish("abcfew".to_string(), QoS::ExactlyOnce, "abc", false)
+            .await
+            .unwrap()
+    );
     // _client
     //     .publish(
     //         "abcfew11".to_string(),
@@ -49,7 +77,7 @@ async fn main() -> Result<()> {
     //         false,
     //     )
     //     .await;
-    // _client.unsubscribe("abcfew11".to_string()).await;
+
     sleep(Duration::from_secs(1330)).await;
     Ok(())
 }
