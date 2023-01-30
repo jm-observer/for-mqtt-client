@@ -21,11 +21,13 @@ pub enum HubMsg {
     Publish(TracePublish),
     /// 接收从broker发送的publish包
     RxPublish(Publish),
-    /// 接收的publish已经完成qos流程
-    RecoverRxId(u16),
+    /// 接收的publish已经完成整个qos流程
+    AffirmRxId(u16),
     Unsubscribe {
         topic: String,
     },
+    /// 确认qos=2的publish包
+    AffirmRxPublish(u16),
     Disconnect,
 }
 

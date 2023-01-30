@@ -4,7 +4,7 @@ use crate::tasks::task_network::{Data, NetworkStaus, TaskNetwork};
 use crate::tasks::{BroadcastTx, MqttEvent, Senders};
 use crate::v3_1_1::{qos, Connect, MqttOptions, Publish};
 use anyhow::Result;
-use log::{debug, error};
+use log::{debug, error, warn};
 use ringbuf::{Consumer, Producer};
 use std::collections::HashMap;
 use std::mem::MaybeUninit;
@@ -34,6 +34,7 @@ pub struct TaskHub {
     rx: mpsc::Receiver<HubMsg>,
     rx_from_network: mpsc::Receiver<NetworkStaus>,
     rx_publish: HashMap<u16, Publish>,
+    rx_publish_id: HashMap<u16, u16>,
 }
 impl TaskHub {
     pub async fn init(options: MqttOptions) -> (Client, Receiver<MqttEvent>) {
@@ -59,6 +60,7 @@ impl TaskHub {
             state: State::default(),
             rx_from_network,
             rx_publish: HashMap::default(),
+            rx_publish_id: Default::default(),
         };
         let client = Client::init(senders);
         let event_rx = client.init_receiver();
@@ -185,25 +187,32 @@ impl TaskHub {
                     self.senders.tx_to_user(publish);
                 }
                 QoSWithPacketId::AtLeastOnce(id) => {
-                    if self.rx_publish.contains_key(&id) {
+                    if self.rx_publish_id.contains_key(&id) {
                         debug!("rx dup publish {:?} from broker", publish)
                     } else {
                         self.rx_publish.insert(id, publish);
+                        self.rx_publish_id.insert(id, id);
                         TaskPublishRxQos1::init(self.senders.clone(), id);
                     }
                 }
                 QoSWithPacketId::ExactlyOnce(id) => {
-                    if self.rx_publish.contains_key(&id) {
+                    if self.rx_publish_id.contains_key(&id) {
                         debug!("rx dup publish {:?} from broker", publish)
                     } else {
                         self.rx_publish.insert(id, publish);
+                        self.rx_publish_id.insert(id, id);
                         TaskPublishRxQos2::init(self.senders.clone(), id);
                     }
                 }
             },
-            HubMsg::RecoverRxId(id) => {
+            HubMsg::AffirmRxId(id) => {
+                if self.rx_publish_id.remove(&id).is_none() {
+                    error!("todo")
+                }
+            }
+            HubMsg::AffirmRxPublish(id) => {
                 if let Some(publish) = self.rx_publish.remove(&id) {
-                    self.senders.tx_to_user(publish);
+                    self.senders.tx_to_user(publish.clone());
                 } else {
                     error!("todo")
                 }

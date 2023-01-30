@@ -26,7 +26,7 @@ impl TaskPublishRxQos1 {
         self.tx.tx_network_default(data).await?;
         self.tx
             .tx_hub
-            .send(HubMsg::RecoverRxId(self.packet_id))
+            .send(HubMsg::AffirmRxId(self.packet_id))
             .await?;
         Ok(())
     }
