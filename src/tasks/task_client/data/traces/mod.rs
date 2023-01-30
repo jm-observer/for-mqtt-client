@@ -1,5 +1,6 @@
 use crate::datas::id::Id;
 use crate::datas::payload::Payload;
+use crate::v3_1_1::SubscribeFilter;
 use crate::QoS;
 use std::sync::Arc;
 
@@ -32,8 +33,21 @@ impl PartialEq for TracePublish {
         self.id == other.id
     }
 }
+
 impl PartialEq<Id> for TracePublish {
     fn eq(&self, other: &Id) -> bool {
         &self.id == other
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct TraceSubscribe {
+    id: Id,
+    pub filters: Vec<SubscribeFilter>,
+}
+
+#[derive(Debug, Clone)]
+pub struct TraceUnubscribe {
+    id: Id,
+    pub topics: Vec<Arc<String>>,
 }

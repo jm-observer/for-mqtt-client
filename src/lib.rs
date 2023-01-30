@@ -7,7 +7,7 @@ pub mod traits;
 pub mod utils;
 pub mod v3_1_1;
 
-pub use tasks::MqttEvent;
+pub use tasks::task_client::data::MqttEvent;
 
 #[derive(Clone)]
 pub enum Transport {

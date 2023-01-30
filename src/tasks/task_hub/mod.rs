@@ -1,7 +1,7 @@
 mod data;
 
 use crate::tasks::task_network::{Data, NetworkStaus, TaskNetwork};
-use crate::tasks::{BroadcastTx, MqttEvent, Senders};
+use crate::tasks::{BroadcastTx, Senders};
 use crate::v3_1_1::{qos, Connect, MqttOptions, Publish};
 use anyhow::Result;
 use log::{debug, error, warn};
@@ -15,6 +15,7 @@ use tokio::sync::mpsc;
 use tokio::time::sleep;
 use tokio::{select, spawn};
 
+use crate::tasks::task_client::data::MqttEvent;
 use crate::tasks::task_client::Client;
 use crate::tasks::task_hub::data::{KeepAliveTime, Reason, State};
 use crate::tasks::task_ping::TaskPing;

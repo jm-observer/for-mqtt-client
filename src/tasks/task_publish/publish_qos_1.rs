@@ -1,5 +1,5 @@
 use crate::datas::payload::Payload;
-use crate::datas::trace_publish::TracePublish;
+use crate::tasks::task_client::data::TracePublish;
 use crate::tasks::task_hub::HubMsg;
 use crate::tasks::task_publish::PublishMsg;
 use crate::tasks::utils::{complete_to_tx_packet, timeout_rx};

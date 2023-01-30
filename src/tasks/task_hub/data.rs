@@ -1,5 +1,5 @@
 use crate::datas::payload::Payload;
-use crate::datas::trace_publish::TracePublish;
+use crate::tasks::task_client::data::TracePublish;
 use crate::tasks::task_network::NetworkStaus;
 use crate::v3_1_1::Publish;
 use crate::QoS;

@@ -21,6 +21,7 @@ use crate::v3_1_1::{
     ConnAck, PingResp, PubAck, PubComp, PubRec, PubRel, Publish, SubAck, UnsubAck,
 };
 use anyhow::Result;
+use task_client::data::MqttEvent;
 use tokio::sync::broadcast::*;
 use tokio::sync::{mpsc, oneshot};
 
@@ -132,27 +133,5 @@ impl Receipter {
         if self.tx.send(self.val).is_err() {
             error!("fail to send receipt")
         }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum UserMsg {}
-
-#[derive(Debug, Clone)]
-pub enum MqttEvent {
-    ConnectSuccess,
-    ConnectFail(String),
-    Publish(Publish),
-    PublishSuccess(u32),
-}
-
-impl From<Publish> for MqttEvent {
-    fn from(msg: Publish) -> Self {
-        MqttEvent::Publish(msg)
-    }
-}
-impl From<u32> for MqttEvent {
-    fn from(id: u32) -> Self {
-        MqttEvent::PublishSuccess(id)
     }
 }

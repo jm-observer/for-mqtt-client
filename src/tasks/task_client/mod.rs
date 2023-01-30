@@ -1,15 +1,16 @@
 use crate::datas::payload::Payload;
-use crate::datas::trace_publish::TracePublish;
 use crate::tasks::task_hub::HubMsg;
 use crate::tasks::task_subscribe::TaskSubscribe;
-use crate::tasks::{MqttEvent, Senders};
+use crate::tasks::Senders;
 use crate::v3_1_1::Error;
 use crate::QoS;
 use bytes::Bytes;
+use data::MqttEvent;
+use data::TracePublish;
 use std::sync::Arc;
 use tokio::sync::broadcast::Receiver;
 
-mod data;
+pub mod data;
 
 pub struct Client {
     tx: Senders,

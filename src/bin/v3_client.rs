@@ -2,7 +2,8 @@
 
 use anyhow::Result;
 use for_mqtt_client::v3_1_1::MqttOptions;
-use for_mqtt_client::{MqttEvent, QoS};
+use for_mqtt_client::MqttEvent;
+use for_mqtt_client::QoS;
 use log::LevelFilter::{Debug, Info};
 use log::{debug, error, info, warn};
 use std::io::Read;
@@ -36,6 +37,7 @@ async fn main() -> Result<()> {
                 MqttEvent::PublishSuccess(id) => {
                     info!("\nPublish Success：{} \n", id);
                 }
+                MqttEvent::SubscribeAck(_) => {}
             }
         }
         warn!("**************");
