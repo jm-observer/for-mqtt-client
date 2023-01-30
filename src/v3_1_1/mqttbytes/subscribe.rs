@@ -11,31 +11,9 @@ pub struct Subscribe {
 }
 
 impl Subscribe {
-    pub fn new<S: Into<Arc<String>>>(path: S, qos: QoS, packet_id: u16) -> Self {
-        let filter = SubscribeFilter {
-            path: path.into(),
-            qos,
-        };
-        let mut bytes = BytesMut::new();
-        Subscribe {
-            packet_id,
-            filters: vec![filter],
-        }
+    pub fn new(filters: Vec<SubscribeFilter>, packet_id: u16) -> Self {
+        Subscribe { packet_id, filters }
     }
-    pub fn data<S: Into<Arc<String>>>(path: S, qos: QoS, pkid: u16) -> Bytes {
-        let filter = SubscribeFilter {
-            path: path.into(),
-            qos,
-        };
-        let mut bytes = BytesMut::new();
-        let subscribe = Subscribe {
-            packet_id: pkid,
-            filters: vec![filter],
-        };
-        subscribe.write(&mut bytes);
-        bytes.freeze()
-    }
-
     pub fn new_many<T>(topics: T) -> Subscribe
     where
         T: IntoIterator<Item = SubscribeFilter>,

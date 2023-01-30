@@ -1,8 +1,9 @@
 use crate::datas::payload::Payload;
+use crate::tasks::task_client::data::{TraceSubscribe, TraceUnubscribe};
 use crate::tasks::task_hub::HubMsg;
 use crate::tasks::task_subscribe::TaskSubscribe;
 use crate::tasks::Senders;
-use crate::v3_1_1::Error;
+use crate::v3_1_1::{Error, SubscribeFilter};
 use crate::QoS;
 use bytes::Bytes;
 use data::MqttEvent;
@@ -41,17 +42,22 @@ impl Client {
             .unwrap();
         Ok(trace_publish)
     }
-    pub async fn subscribe(&self, topic: String, qos: QoS) {
+    pub async fn subscribe(&self, topic: String, qos: QoS) -> TraceSubscribe {
+        let filter = SubscribeFilter::new(topic, qos);
+        let trace = TraceSubscribe::new(vec![filter]);
         self.tx
             .tx_hub
-            .send(HubMsg::Subscribe { topic, qos })
+            .send(HubMsg::Subscribe(trace.clone()))
             .await
             .unwrap();
+        trace
     }
     pub async fn unsubscribe(&self, topic: String) {
+        let topic = Arc::new(topic);
+        let trace = TraceUnubscribe::new(vec![topic]);
         self.tx
             .tx_hub
-            .send(HubMsg::Unsubscribe { topic })
+            .send(HubMsg::Unsubscribe(trace))
             .await
             .unwrap();
     }

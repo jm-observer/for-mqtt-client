@@ -11,12 +11,8 @@ pub struct Unsubscribe {
 }
 
 impl Unsubscribe {
-    pub fn new<S: Into<Arc<String>>>(topic: S, packet_id: u16) -> Self {
-        let mut bytes = BytesMut::new();
-        Unsubscribe {
-            packet_id,
-            topics: vec![topic.into()],
-        }
+    pub fn new(topics: Vec<Arc<String>>, packet_id: u16) -> Self {
+        Unsubscribe { packet_id, topics }
     }
 
     pub fn read(fixed_header: FixedHeader, mut bytes: Bytes) -> Result<Self, Error> {

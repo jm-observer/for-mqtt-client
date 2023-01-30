@@ -1,3 +1,4 @@
+use crate::tasks::task_client::data::{TraceUnubscribe, UnsubscribeAck};
 use crate::tasks::task_hub::HubMsg;
 use crate::tasks::task_subscribe::SubscribeMsg;
 use crate::tasks::utils::complete_to_tx_packet;
@@ -11,17 +12,16 @@ use tokio::spawn;
 /// consider the order in which pushlish   are repeated
 pub struct TaskUnsubscribe {
     tx: Senders,
-    topic: Arc<String>,
+    trace_unsubscribe: TraceUnubscribe,
     packet_id: u16,
 }
 
 impl TaskUnsubscribe {
-    pub fn init<T: Into<Arc<String>>>(tx: Senders, topic: T, packet_id: u16) {
-        let topic = topic.into();
+    pub fn init(tx: Senders, trace_unsubscribe: TraceUnubscribe, packet_id: u16) {
         spawn(async move {
             let mut unsubscribe = Self {
                 tx,
-                topic,
+                trace_unsubscribe,
                 packet_id,
             };
             unsubscribe.run().await.unwrap();
@@ -29,7 +29,7 @@ impl TaskUnsubscribe {
     }
     async fn run(&mut self) -> anyhow::Result<()> {
         debug!("start to unsubscribe");
-        let mut packet = Unsubscribe::new(self.topic.clone(), self.packet_id);
+        let mut packet = Unsubscribe::new(self.trace_unsubscribe.topics.clone(), self.packet_id);
         let mut rx_ack = self.tx.broadcast_tx.tx_unsub_ack.subscribe();
         complete_to_tx_packet(
             &mut rx_ack,
@@ -44,6 +44,8 @@ impl TaskUnsubscribe {
             .send(HubMsg::RecoverId(self.packet_id))
             .await
             .unwrap();
+        self.tx
+            .tx_to_user::<UnsubscribeAck>(self.trace_unsubscribe.clone().into());
         Ok(())
     }
 }

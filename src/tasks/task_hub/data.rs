@@ -1,5 +1,5 @@
 use crate::datas::payload::Payload;
-use crate::tasks::task_client::data::TracePublish;
+use crate::tasks::task_client::data::{TracePublish, TraceSubscribe, TraceUnubscribe};
 use crate::tasks::task_network::NetworkStaus;
 use crate::v3_1_1::Publish;
 use crate::QoS;
@@ -14,18 +14,13 @@ pub enum HubMsg {
     PingSuccess,
     PingFail,
     KeepAlive(KeepAliveTime),
-    Subscribe {
-        topic: String,
-        qos: QoS,
-    },
+    Subscribe(TraceSubscribe),
     Publish(TracePublish),
     /// 接收从broker发送的publish包
     RxPublish(Publish),
     /// 接收的publish已经完成整个qos流程
     AffirmRxId(u16),
-    Unsubscribe {
-        topic: String,
-    },
+    Unsubscribe(TraceUnubscribe),
     /// 确认qos=2的publish包
     AffirmRxPublish(u16),
     Disconnect,

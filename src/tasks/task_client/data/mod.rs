@@ -6,7 +6,6 @@ pub use traces::*;
 
 use crate::v3_1_1::{Publish, SubscribeFilter};
 use crate::QoS;
-use acks::SubscribeAck;
 use bytes::Bytes;
 use std::sync::Arc;
 
@@ -25,7 +24,16 @@ pub enum MqttEvent {
     SubscribeAck(SubscribeAck),
     UnsubscribeAck(UnsubscribeAck),
 }
-
+impl From<SubscribeAck> for MqttEvent {
+    fn from(msg: SubscribeAck) -> Self {
+        MqttEvent::SubscribeAck(msg)
+    }
+}
+impl From<UnsubscribeAck> for MqttEvent {
+    fn from(msg: UnsubscribeAck) -> Self {
+        MqttEvent::UnsubscribeAck(msg)
+    }
+}
 impl From<Publish> for MqttEvent {
     fn from(msg: Publish) -> Self {
         MqttEvent::Publish(msg)

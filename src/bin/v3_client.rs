@@ -37,7 +37,10 @@ async fn main() -> Result<()> {
                 MqttEvent::PublishSuccess(id) => {
                     info!("\nPublish Success：{} \n", id);
                 }
-                MqttEvent::SubscribeAck(_) => {}
+                MqttEvent::SubscribeAck(ack) => {
+                    info!("\nSubscribeAck：{:?} \n", ack);
+                }
+                MqttEvent::UnsubscribeAck(ack) => info!("\nUnsubscribeAck：{:?} \n", ack),
             }
         }
         warn!("**************");

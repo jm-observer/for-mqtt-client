@@ -42,12 +42,29 @@ impl PartialEq<Id> for TracePublish {
 
 #[derive(Debug, Clone)]
 pub struct TraceSubscribe {
-    id: Id,
+    pub(crate) id: Id,
     pub filters: Vec<SubscribeFilter>,
+}
+
+impl TraceSubscribe {
+    pub fn new(filters: Vec<SubscribeFilter>) -> Self {
+        Self {
+            id: Default::default(),
+            filters,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct TraceUnubscribe {
-    id: Id,
+    pub(crate) id: Id,
     pub topics: Vec<Arc<String>>,
+}
+impl TraceUnubscribe {
+    pub fn new(topics: Vec<Arc<String>>) -> Self {
+        Self {
+            id: Default::default(),
+            topics,
+        }
+    }
 }

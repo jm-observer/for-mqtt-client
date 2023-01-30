@@ -163,8 +163,12 @@ impl TaskHub {
                     TaskPing::init(self.senders.clone());
                 }
             }
-            HubMsg::Subscribe { topic, qos } => {
-                TaskSubscribe::init(self.senders.clone(), topic, qos, self.request_id(b).await);
+            HubMsg::Subscribe(trace_subscribe) => {
+                TaskSubscribe::init(
+                    self.senders.clone(),
+                    trace_subscribe,
+                    self.request_id(b).await,
+                );
             }
             HubMsg::Publish(trace_publish) => match trace_publish.qos {
                 QoS::AtMostOnce => {
@@ -179,8 +183,12 @@ impl TaskHub {
                     TaskPublishQos2::init(self.senders.clone(), trace_publish, pkid).await;
                 }
             },
-            HubMsg::Unsubscribe { topic } => {
-                TaskUnsubscribe::init(self.senders.clone(), topic, self.request_id(b).await);
+            HubMsg::Unsubscribe(trace_unsubscribe) => {
+                TaskUnsubscribe::init(
+                    self.senders.clone(),
+                    trace_unsubscribe,
+                    self.request_id(b).await,
+                );
             }
             HubMsg::Disconnect => {}
             HubMsg::RxPublish(publish) => match publish.qos {
