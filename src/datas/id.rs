@@ -9,3 +9,8 @@ impl Default for Id {
         Self(ID.fetch_add(1, Ordering::Relaxed))
     }
 }
+impl Id {
+    pub fn id() -> u32 {
+        Self::default().0
+    }
+}

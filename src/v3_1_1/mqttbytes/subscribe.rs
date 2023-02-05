@@ -98,9 +98,9 @@ pub struct SubscribeFilter {
 }
 
 impl SubscribeFilter {
-    pub fn new(path: String, qos: QoS) -> SubscribeFilter {
+    pub fn new<T: Into<Arc<String>>>(path: T, qos: QoS) -> SubscribeFilter {
         SubscribeFilter {
-            path: Arc::new(path),
+            path: path.into(),
             qos,
         }
     }

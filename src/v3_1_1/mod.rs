@@ -12,7 +12,7 @@ use crate::tasks::task_client::Client;
 use crate::tasks::{Senders, TaskHub};
 pub use mqttbytes::*;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct MqttOptions {
     /// broker address that you want to connect to
     broker_addr: String,

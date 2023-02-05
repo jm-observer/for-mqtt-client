@@ -13,6 +13,7 @@ use tokio::sync::broadcast::Receiver;
 
 pub mod data;
 
+#[derive(Clone)]
 pub struct Client {
     tx: Senders,
 }
@@ -42,7 +43,7 @@ impl Client {
             .unwrap();
         Ok(trace_publish)
     }
-    pub async fn subscribe(&self, topic: String, qos: QoS) -> TraceSubscribe {
+    pub async fn subscribe<T: Into<Arc<String>>>(&self, topic: T, qos: QoS) -> TraceSubscribe {
         let filter = SubscribeFilter::new(topic, qos);
         let trace = TraceSubscribe::new(vec![filter]);
         self.tx
@@ -52,14 +53,15 @@ impl Client {
             .unwrap();
         trace
     }
-    pub async fn unsubscribe(&self, topic: String) {
+    pub async fn unsubscribe(&self, topic: String) -> TraceUnubscribe {
         let topic = Arc::new(topic);
         let trace = TraceUnubscribe::new(vec![topic]);
         self.tx
             .tx_hub
-            .send(HubMsg::Unsubscribe(trace))
+            .send(HubMsg::Unsubscribe(trace.clone()))
             .await
             .unwrap();
+        trace
     }
     pub async fn disconnect(&self) {
         self.tx.tx_hub.send(HubMsg::Disconnect).await.unwrap();

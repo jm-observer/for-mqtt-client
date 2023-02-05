@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub struct SubscribeAck {
-    pub id: Id,
+    pub id: u32,
     pub filter_ack: Vec<SubscribeFilterAck>,
 }
 
@@ -18,7 +18,7 @@ pub struct SubscribeFilterAck {
 
 #[derive(Debug, Clone)]
 pub struct UnsubscribeAck {
-    pub id: Id,
+    pub id: u32,
 }
 
 impl From<TraceUnubscribe> for UnsubscribeAck {

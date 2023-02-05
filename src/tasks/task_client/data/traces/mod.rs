@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub struct TracePublish {
-    id: Id,
+    id: u32,
     pub topic: Arc<String>,
     pub qos: QoS,
     pub payload: Arc<Payload>,
@@ -16,7 +16,7 @@ pub struct TracePublish {
 impl TracePublish {
     pub fn new(topic: Arc<String>, qos: QoS, payload: Arc<Payload>, retain: bool) -> Self {
         Self {
-            id: Default::default(),
+            id: Id::id(),
             topic,
             qos,
             payload,
@@ -24,7 +24,7 @@ impl TracePublish {
         }
     }
     pub fn id(&self) -> u32 {
-        self.id.0
+        self.id
     }
 }
 
@@ -34,15 +34,15 @@ impl PartialEq for TracePublish {
     }
 }
 
-impl PartialEq<Id> for TracePublish {
-    fn eq(&self, other: &Id) -> bool {
-        &self.id == other
+impl PartialEq<u32> for TracePublish {
+    fn eq(&self, other: &u32) -> bool {
+        self.id == *other
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct TraceSubscribe {
-    pub(crate) id: Id,
+    pub id: u32,
     pub filters: Vec<SubscribeFilter>,
 }
 
@@ -57,13 +57,13 @@ impl TraceSubscribe {
 
 #[derive(Debug, Clone)]
 pub struct TraceUnubscribe {
-    pub(crate) id: Id,
+    pub id: u32,
     pub topics: Vec<Arc<String>>,
 }
 impl TraceUnubscribe {
     pub fn new(topics: Vec<Arc<String>>) -> Self {
         Self {
-            id: Default::default(),
+            id: Id::id(),
             topics,
         }
     }
