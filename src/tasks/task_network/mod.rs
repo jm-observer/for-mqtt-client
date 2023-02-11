@@ -56,7 +56,6 @@ impl TaskNetwork {
     pub fn run(mut self) {
         tokio::spawn(async move {
             debug!("{}: {}", self.addr, self.port);
-            self.is_connected = true;
             let mut buf = BytesMut::with_capacity(10 * 1024);
             let mut stream = self.try_connect(&mut buf).await;
             loop {

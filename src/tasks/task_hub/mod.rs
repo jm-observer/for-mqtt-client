@@ -114,6 +114,15 @@ impl TaskHub {
     fn update_state(&mut self, state: State) {
         debug!("update_state: {:?}", state);
         self.state = state;
+        match &self.state {
+            State::Connected => {
+                self.senders.tx_to_user(MqttEvent::ConnectSuccess);
+            }
+            State::UnConnected(msg) => {
+                self.senders
+                    .tx_to_user(MqttEvent::ConnectFail(msg.to_msg()));
+            }
+        }
     }
     ///
     async fn try_to_connect(&mut self, keep_alive_time: &mut KeepAliveTime) {

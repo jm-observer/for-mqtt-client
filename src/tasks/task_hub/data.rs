@@ -38,6 +38,18 @@ pub enum Reason {
     PingFail,
 }
 
+impl Reason {
+    pub fn to_msg(&self) -> String {
+        match self {
+            Reason::Init => "init".to_string(),
+            Reason::NetworkErr(msg) => {
+                format!("NetworkErr: {}", msg)
+            }
+            Reason::PingFail => "PingFail".to_string(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct KeepAliveTime(u64);
 
