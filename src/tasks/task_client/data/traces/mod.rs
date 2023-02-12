@@ -49,7 +49,7 @@ pub struct TraceSubscribe {
 impl TraceSubscribe {
     pub fn new(filters: Vec<SubscribeFilter>) -> Self {
         Self {
-            id: Default::default(),
+            id: Id::id(),
             filters,
         }
     }

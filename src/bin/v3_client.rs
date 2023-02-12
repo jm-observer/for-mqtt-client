@@ -45,10 +45,39 @@ async fn main() -> Result<()> {
         }
         warn!("**************");
     });
-    _client
-        .subscribe("abcfew".to_string(), QoS::ExactlyOnce)
-        .await;
+    println!(
+        "{:?}",
+        _client
+            .subscribe("abcfew".to_string(), QoS::ExactlyOnce)
+            .await
+    );
+    println!(
+        "{:?}",
+        _client
+            .subscribe("abcfewfe".to_string(), QoS::ExactlyOnce)
+            .await
+    );
+    println!(
+        "{:?}",
+        _client
+            .subscribe("abcfewwewew".to_string(), QoS::ExactlyOnce)
+            .await
+    );
     sleep(Duration::from_secs(2)).await;
+    info!(
+        "{:?}",
+        _client
+            .publish("abcfew".to_string(), QoS::ExactlyOnce, "abc", false)
+            .await
+            .unwrap()
+    );
+    info!(
+        "{:?}",
+        _client
+            .publish("abcfew".to_string(), QoS::ExactlyOnce, "abc", false)
+            .await
+            .unwrap()
+    );
     info!(
         "{:?}",
         _client
