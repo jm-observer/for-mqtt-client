@@ -33,6 +33,10 @@ impl TaskPublishRxQos2 {
             &mut data,
         )
         .await?;
+        self.tx
+            .tx_hub
+            .send(HubMsg::AffirmRxPublish(self.packet_id))
+            .await?;
         let data = PubComp::data(self.packet_id);
         self.tx.tx_network_default(data).await?;
         self.tx

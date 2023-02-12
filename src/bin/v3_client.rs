@@ -67,21 +67,36 @@ async fn main() -> Result<()> {
     info!(
         "{:?}",
         _client
-            .publish("abcfew".to_string(), QoS::ExactlyOnce, "abc", false)
+            .publish(
+                "abcfew".to_string(),
+                QoS::ExactlyOnce,
+                "abc".as_bytes(),
+                false
+            )
             .await
             .unwrap()
     );
     info!(
         "{:?}",
         _client
-            .publish("abcfew".to_string(), QoS::ExactlyOnce, "abc", false)
+            .publish(
+                "abcfew".to_string(),
+                QoS::ExactlyOnce,
+                "abc".as_bytes(),
+                false
+            )
             .await
             .unwrap()
     );
     info!(
         "{:?}",
         _client
-            .publish("abcfew".to_string(), QoS::ExactlyOnce, "abc", false)
+            .publish(
+                "abcfew".to_string(),
+                QoS::ExactlyOnce,
+                "abc".as_bytes(),
+                false
+            )
             .await
             .unwrap()
     );

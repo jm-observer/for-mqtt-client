@@ -2,6 +2,7 @@ use crate::datas::id::Id;
 use crate::datas::payload::Payload;
 use crate::v3_1_1::SubscribeFilter;
 use crate::QoS;
+use bytes::Bytes;
 use std::sync::Arc;
 
 #[derive(Debug, Clone)]
@@ -9,12 +10,12 @@ pub struct TracePublish {
     id: u32,
     pub topic: Arc<String>,
     pub qos: QoS,
-    pub payload: Arc<Payload>,
+    pub payload: Arc<Bytes>,
     pub retain: bool,
 }
 
 impl TracePublish {
-    pub fn new(topic: Arc<String>, qos: QoS, payload: Arc<Payload>, retain: bool) -> Self {
+    pub fn new(topic: Arc<String>, qos: QoS, payload: Arc<Bytes>, retain: bool) -> Self {
         Self {
             id: Id::id(),
             topic,

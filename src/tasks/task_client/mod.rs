@@ -22,7 +22,7 @@ impl Client {
     pub fn init(tx: Senders) -> Self {
         Self { tx }
     }
-    pub async fn publish<T: Into<Arc<String>>, D: Into<Payload>>(
+    pub async fn publish<T: Into<Arc<String>>, D: Into<Bytes>>(
         &self,
         topic: T,
         qos: QoS,
@@ -34,7 +34,25 @@ impl Client {
         if payload.len() + 4 + topic.len() > 268_435_455 {
             return Err(Error::PayloadTooLong);
         };
-        let payload = Arc::new(payload);
+        let trace_publish = TracePublish::new(topic, qos, payload.into(), retain);
+        self.tx
+            .tx_hub
+            .send(HubMsg::Publish(trace_publish.clone()))
+            .await
+            .unwrap();
+        Ok(trace_publish)
+    }
+    pub async fn publish_by_arc<T: Into<Arc<String>>>(
+        &self,
+        topic: T,
+        qos: QoS,
+        payload: Arc<Bytes>,
+        retain: bool,
+    ) -> Result<TracePublish, Error> {
+        let topic = topic.into();
+        if payload.len() + 4 + topic.len() > 268_435_455 {
+            return Err(Error::PayloadTooLong);
+        };
         let trace_publish = TracePublish::new(topic, qos, payload, retain);
         self.tx
             .tx_hub

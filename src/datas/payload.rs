@@ -1,10 +1,11 @@
 use bytes::Bytes;
 use std::fmt::{Debug, Formatter};
+use std::sync::Arc;
 
 #[derive(Clone, PartialEq, Eq)]
 pub enum Payload {
-    String(String),
-    Bytes(Bytes),
+    String(Arc<String>),
+    Bytes(Arc<Bytes>),
 }
 
 impl Payload {
@@ -35,18 +36,18 @@ impl Debug for Payload {
     }
 }
 
-impl From<String> for Payload {
-    fn from(val: String) -> Self {
-        Self::String(val)
-    }
-}
-impl From<&str> for Payload {
-    fn from(val: &str) -> Self {
-        Self::String(val.into())
-    }
-}
-impl From<Bytes> for Payload {
-    fn from(val: Bytes) -> Self {
-        Self::Bytes(val)
-    }
-}
+// impl From<String> for Payload {
+//     fn from(val: String) -> Self {
+//         Self::String(val)
+//     }
+// }
+// impl From<&str> for Payload {
+//     fn from(val: &str) -> Self {
+//         Self::String(val.into())
+//     }
+// }
+// impl From<Bytes> for Payload {
+//     fn from(val: Bytes) -> Self {
+//         Self::Bytes(val)
+//     }
+// }

@@ -11,11 +11,11 @@ pub struct Publish {
     pub qos: QoSWithPacketId,
     pub retain: bool,
     pub topic: Arc<String>,
-    pub payload: Arc<Payload>,
+    pub payload: Arc<Bytes>,
 }
 
 impl Publish {
-    pub fn new<S: Into<Arc<String>>, P: Into<Arc<Payload>>>(
+    pub fn new<S: Into<Arc<String>>, P: Into<Arc<Bytes>>>(
         topic: S,
         qos: QoSWithPacketId,
         payload: P,
@@ -84,7 +84,7 @@ impl Publish {
             buffer.put_u16(pkid);
         }
 
-        buffer.extend_from_slice(&self.payload.as_bytes());
+        buffer.extend_from_slice(&self.payload.as_ref());
 
         // TODO: Returned length is wrong in other packets. Fix it
         1 + count + len
