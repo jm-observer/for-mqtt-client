@@ -40,7 +40,7 @@ impl TaskUnsubscribe {
         )
         .await?;
         self.tx
-            .tx_hub
+            .tx_hub_msg
             .send(HubMsg::RecoverId(self.packet_id))
             .await
             .unwrap();

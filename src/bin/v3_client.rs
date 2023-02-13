@@ -21,7 +21,7 @@ async fn main() -> Result<()> {
         .start();
     let mut options = MqttOptions::new("abc111".to_string(), "broker.emqx.io".to_string(), 1883);
     options.set_keep_alive(30);
-    let (_client, mut event_rx) = options.run().await;
+    let (_client, mut event_rx) = options.connect().await;
     spawn(async move {
         while let Ok(event) = event_rx.recv().await {
             match event {

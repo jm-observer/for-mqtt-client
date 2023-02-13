@@ -1,8 +1,8 @@
 use crate::datas::payload::Payload;
 use crate::tasks::task_client::data::{TracePublish, TraceSubscribe, TraceUnubscribe};
-use crate::tasks::task_network::NetworkStaus;
+use crate::tasks::task_network::NetworkStatus;
 use crate::v3_1_1::Publish;
-use crate::QoS;
+use crate::{ClientCommand, QoS};
 use bytes::Bytes;
 use std::default::Default;
 use std::sync::Arc;
@@ -14,16 +14,12 @@ pub enum HubMsg {
     PingSuccess,
     PingFail,
     KeepAlive(KeepAliveTime),
-    Subscribe(TraceSubscribe),
-    Publish(TracePublish),
     /// 接收从broker发送的publish包
     RxPublish(Publish),
     /// 接收的publish已经完成整个qos流程
     AffirmRxId(u16),
-    Unsubscribe(TraceUnubscribe),
     /// 确认qos=2的publish包
     AffirmRxPublish(u16),
-    Disconnect,
 }
 
 #[derive(Debug, Clone)]
@@ -87,11 +83,58 @@ impl Default for Reason {
     }
 }
 
-impl From<NetworkStaus> for State {
-    fn from(status: NetworkStaus) -> Self {
+impl From<NetworkStatus> for State {
+    fn from(status: NetworkStatus) -> Self {
         match status {
-            NetworkStaus::Connected => Self::Connected,
-            NetworkStaus::Disconnect(error) => Self::UnConnected(Reason::NetworkErr(error)),
+            NetworkStatus::Connected => Self::Connected,
+            NetworkStatus::Disconnect(error) => Self::UnConnected(Reason::NetworkErr(error)),
         }
+    }
+}
+
+pub enum HubState {
+    ToConnect,
+    Connected,
+    ToStop,
+    Stoped,
+}
+
+impl HubState {
+    pub fn is_to_connect(&self) -> bool {
+        match self {
+            HubState::ToConnect => true,
+            _ => false,
+        }
+    }
+    pub fn update_by_network_status(&self, status: &NetworkStatus) -> Self {
+        match status {
+            NetworkStatus::Connected => match self {
+                HubState::ToConnect | HubState::Connected => Self::Connected,
+                HubState::ToStop | HubState::Stoped => Self::ToStop,
+            },
+            NetworkStatus::Disconnect(_) => match self {
+                HubState::ToConnect | HubState::Connected => Self::ToConnect,
+                HubState::ToStop | HubState::Stoped => Self::Stoped,
+            },
+        }
+    }
+    pub fn update_by_ping(&self, is_success: bool) -> Self {
+        if is_success {
+            match self {
+                HubState::ToConnect | HubState::Connected => Self::Connected,
+                HubState::ToStop | HubState::Stoped => Self::ToStop,
+            }
+        } else {
+            match self {
+                HubState::ToConnect | HubState::Connected => Self::ToConnect,
+                HubState::ToStop | HubState::Stoped => Self::Stoped,
+            }
+        }
+    }
+}
+
+impl Default for HubState {
+    fn default() -> Self {
+        Self::ToConnect
     }
 }

@@ -257,7 +257,7 @@ impl MqttOptions {
         self.manual_acks
     }
 
-    pub async fn run(self) -> (Client, Receiver<MqttEvent>) {
-        TaskHub::init(self).await
+    pub async fn connect(self) -> (Client, Receiver<MqttEvent>) {
+        TaskHub::connect(self).await
     }
 }

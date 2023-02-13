@@ -20,6 +20,7 @@ use crate::tasks::task_subscribe::SubscribeMsg;
 use crate::v3_1_1::{
     ConnAck, PingResp, PubAck, PubComp, PubRec, PubRel, Publish, SubAck, UnsubAck,
 };
+use crate::ClientCommand;
 use anyhow::Result;
 use task_client::data::MqttEvent;
 use tokio::sync::broadcast::*;
@@ -71,16 +72,22 @@ impl BroadcastTx {
 #[derive(Clone)]
 pub struct Senders {
     tx_network: mpsc::Sender<Data>,
-    tx_hub: mpsc::Sender<HubMsg>,
+    tx_hub_msg: mpsc::Sender<HubMsg>,
+    tx_client_command: mpsc::Sender<ClientCommand>,
     broadcast_tx: BroadcastTx,
 }
 
 impl Senders {
-    pub fn init(tx_network_writer: mpsc::Sender<Data>, tx_hub: mpsc::Sender<HubMsg>) -> Self {
+    pub fn init(
+        tx_network_writer: mpsc::Sender<Data>,
+        tx_hub: mpsc::Sender<HubMsg>,
+        tx_client_command: mpsc::Sender<ClientCommand>,
+    ) -> Self {
         Self {
             tx_network: tx_network_writer,
-            tx_hub,
+            tx_hub_msg: tx_hub,
             broadcast_tx: BroadcastTx::init(1024),
+            tx_client_command,
         }
     }
     pub fn rx_user(&self) -> Receiver<MqttEvent> {

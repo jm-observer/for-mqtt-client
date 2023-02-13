@@ -54,7 +54,7 @@ impl TaskPublishQos1 {
         .await?;
         debug!("publish qos 1 success");
         self.tx
-            .tx_hub
+            .tx_hub_msg
             .send(HubMsg::RecoverId(self.packet_id))
             .await?;
         self.tx.tx_to_user(self.trace_publish.id());

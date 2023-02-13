@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 /// broadcast network status
-pub enum NetworkStaus {
+pub enum NetworkStatus {
     Connected,
     Disconnect(String),
 }
@@ -14,6 +14,7 @@ pub enum NetworkStaus {
 pub enum Data {
     NetworkData(DataWaitingToBeSend),
     Reconnect,
+    Disconnect,
 }
 
 impl Debug for Data {
@@ -24,6 +25,9 @@ impl Debug for Data {
             }
             Data::Reconnect => {
                 write!(f, "Reconnect")
+            }
+            Data::Disconnect => {
+                write!(f, "Disconnect")
             }
         }
     }

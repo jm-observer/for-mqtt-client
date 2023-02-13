@@ -34,7 +34,7 @@ impl TaskPing {
             } else {
                 timeout_time -= 1;
                 if timeout_time <= 0 {
-                    if let Err(_) = self.tx.tx_hub.send(HubMsg::PingFail).await {
+                    if let Err(_) = self.tx.tx_hub_msg.send(HubMsg::PingFail).await {
                         error!("");
                     }
                     return;
@@ -46,7 +46,7 @@ impl TaskPing {
             let result = timeout(Duration::from_secs(3), rx_ack.recv()).await;
             if let Ok(Ok(_)) = result {
                 debug!("ping resp recv success");
-                if let Err(e) = self.tx.tx_hub.send(HubMsg::PingSuccess).await {
+                if let Err(e) = self.tx.tx_hub_msg.send(HubMsg::PingSuccess).await {
                     error!("");
                 }
                 return;
@@ -54,7 +54,7 @@ impl TaskPing {
                 timeout_time -= 1;
             }
         }
-        if let Err(_) = self.tx.tx_hub.send(HubMsg::PingFail).await {
+        if let Err(_) = self.tx.tx_hub_msg.send(HubMsg::PingFail).await {
             error!("");
         }
     }

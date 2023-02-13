@@ -9,11 +9,14 @@ use crate::QoS;
 use bytes::Bytes;
 use std::sync::Arc;
 
-// impl<T: Into<Arc<String>>> From<(T, QoS)> for SubscribeFilter {
-//     fn from(_: T) -> Self {
-//         todo!()
-//     }
-// }
+#[derive(Debug, Clone)]
+pub enum ClientCommand {
+    Connect,
+    Disconnect,
+    Publish(TracePublish),
+    Subscribe(TraceSubscribe),
+    Unsubscribe(TraceUnubscribe),
+}
 
 #[derive(Debug, Clone)]
 pub enum MqttEvent {

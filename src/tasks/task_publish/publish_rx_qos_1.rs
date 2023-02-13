@@ -25,11 +25,11 @@ impl TaskPublishRxQos1 {
         let data = PubAck::data(self.packet_id);
         self.tx.tx_network_default(data).await?;
         self.tx
-            .tx_hub
+            .tx_hub_msg
             .send(HubMsg::AffirmRxPublish(self.packet_id))
             .await?;
         self.tx
-            .tx_hub
+            .tx_hub_msg
             .send(HubMsg::AffirmRxId(self.packet_id))
             .await?;
         Ok(())

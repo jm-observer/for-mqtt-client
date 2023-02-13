@@ -46,7 +46,10 @@ impl TaskSubscribe {
         )
         .await?;
         let SubAck { return_codes, .. } = ack;
-        tx.tx_hub.send(HubMsg::RecoverId(packet_id)).await.unwrap();
+        tx.tx_hub_msg
+            .send(HubMsg::RecoverId(packet_id))
+            .await
+            .unwrap();
 
         let TraceSubscribe { id, filters } = trace_packet;
         if return_codes.len() != filters.len() {

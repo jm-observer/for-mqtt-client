@@ -30,8 +30,9 @@ pub struct TaskNetwork {
     connect_packet: Arc<Bytes>,
     senders: Senders,
     is_connected: bool,
+
     rx: mpsc::Receiver<Data>,
-    tx: mpsc::Sender<NetworkStaus>,
+    tx: mpsc::Sender<NetworkStatus>,
 }
 
 impl TaskNetwork {
@@ -41,7 +42,7 @@ impl TaskNetwork {
         inner_tx: Senders,
         rx: mpsc::Receiver<Data>,
         connect_packet: Arc<Bytes>,
-        tx: mpsc::Sender<NetworkStaus>,
+        tx: mpsc::Sender<NetworkStatus>,
     ) -> Self {
         Self {
             addr,
@@ -100,7 +101,12 @@ impl TaskNetwork {
 
     async fn network_disconnect(&mut self, error: String) {
         self.is_connected = false;
-        if self.tx.send(NetworkStaus::Disconnect(error)).await.is_err() {
+        if self
+            .tx
+            .send(NetworkStatus::Disconnect(error))
+            .await
+            .is_err()
+        {
             error!("");
         }
     }
@@ -139,6 +145,7 @@ impl TaskNetwork {
             Data::Reconnect => {
                 self.is_connected = false;
             }
+            Data::Disconnect => {}
         }
     }
 
@@ -216,7 +223,7 @@ impl TaskNetwork {
             PacketType::ConnAck => {
                 let _ = ConnAck::read(fixed_header, packet)?;
                 self.is_connected = true;
-                self.tx.send(NetworkStaus::Connected).await?;
+                self.tx.send(NetworkStatus::Connected).await?;
             }
             PacketType::Publish => {
                 self.tx_publish(Publish::read(fixed_header, packet)?).await;
@@ -283,7 +290,7 @@ impl TaskNetwork {
     async fn tx_publish(&self, msg: Publish) {
         if self
             .senders
-            .tx_hub
+            .tx_hub_msg
             .send(HubMsg::RxPublish(msg))
             .await
             .is_err()
@@ -302,7 +309,7 @@ impl TaskNetwork {
         }
     }
     async fn tx_connect_rel(&self, msg: HubMsg) {
-        if self.senders.tx_hub.send(msg).await.is_err() {
+        if self.senders.tx_hub_msg.send(msg).await.is_err() {
             error!("fail to send connector");
         }
     }

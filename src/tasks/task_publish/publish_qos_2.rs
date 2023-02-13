@@ -59,7 +59,7 @@ impl TaskPublishQos2 {
         )
         .await?;
         self.tx
-            .tx_hub
+            .tx_hub_msg
             .send(HubMsg::RecoverId(self.packet_id))
             .await?;
         self.tx.tx_to_user(self.trace_publish.id());
