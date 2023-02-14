@@ -1,6 +1,6 @@
 use crate::v3_1_1::*;
-use anyhow::Context;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
+use anyhow::{bail, Context};
 use bytes::{Bytes, BytesMut};
 use log::{debug, error, info, warn};
 use std::sync::Arc;
@@ -29,10 +29,9 @@ pub struct TaskNetwork {
     port: u16,
     connect_packet: Arc<Bytes>,
     senders: Senders,
-    is_connected: bool,
-
     rx: mpsc::Receiver<Data>,
-    tx: mpsc::Sender<NetworkStatus>,
+    tx: mpsc::Sender<NetworkEvent>,
+    state: NetworkState,
 }
 
 impl TaskNetwork {
@@ -42,71 +41,79 @@ impl TaskNetwork {
         inner_tx: Senders,
         rx: mpsc::Receiver<Data>,
         connect_packet: Arc<Bytes>,
-        tx: mpsc::Sender<NetworkStatus>,
+        tx: mpsc::Sender<NetworkEvent>,
     ) -> Self {
         Self {
             addr,
             port,
             senders: inner_tx,
             rx,
-            is_connected: false,
+            state: NetworkState::ToConnect,
             connect_packet,
             tx,
         }
     }
     pub fn run(mut self) {
         tokio::spawn(async move {
-            debug!("{}: {}", self.addr, self.port);
-            let mut buf = BytesMut::with_capacity(10 * 1024);
-            let mut stream = self.try_connect(&mut buf).await;
-            loop {
-                if !self.is_connected {
-                    buf = BytesMut::with_capacity(10 * 1024);
-                    stream = self.try_connect(&mut buf).await;
+            self._run().await.unwrap();
+        });
+    }
+    async fn _run(&mut self) -> Result<()> {
+        debug!("{}: {}", self.addr, self.port);
+        let mut buf = BytesMut::with_capacity(10 * 1024);
+        let mut stream = self.run_connect(&mut buf).await;
+        loop {
+            match self.state {
+                NetworkState::ToConnect => {
+                    stream = self.run_connect(&mut buf).await;
                 }
-                select! {
-                    read = stream.read_buf(&mut buf) => match read  {
-                        Ok(len) => {
-                            if len == 0 {
-                                error!("tcp read 0 size");
-                                self.is_connected = false;
-                                continue;
-                            }
-                            if let Err(e) = self.deal_network_msg(&mut buf).await {
-                                error!("{:?}", e);
-                            }
-                        }
-                        Err(e) => {
-                            error!("{:?}", e);
-                            self.is_connected = false;
-                            continue;
-                        }
-
-                    },
-                    val = self.rx.recv() => match val {
-                        Some(val) => {
-                            debug!("{:?}", val);
-                            self.deal_inner_msg(&mut stream, val).await;
-                            continue;
-                        }
-                        None => {
-                            error!("None");
-                            continue;
-                        }
+                NetworkState::Connected => {
+                    if let Err(e) = self.run_connected(&mut stream, &mut buf).await {
+                        error!("{:?}", e);
+                        self.state = NetworkState::ToConnect;
                     }
                 }
+                NetworkState::ToDisconnect => {
+                    self.run_to_disconnected(&mut stream).await;
+                }
+                NetworkState::Disconnected => {
+                    break;
+                }
             }
-        });
+        }
+        Ok(())
+    }
+    async fn run_connected(&mut self, stream: &mut TcpStream, buf: &mut BytesMut) -> Result<()> {
+        loop {
+            if !self.state.is_connected() {
+                return Ok(());
+            }
+            select! {
+                read = stream.read_buf(buf) => {
+                    if read? == 0 {
+                        bail!("tcp read 0 size");
+                    }
+                    self.deal_network_msg(buf).await?;
+                },
+                val = self.rx.recv() => {
+                    self.deal_inner_msg(stream, val.ok_or(anyhow!("rx none"))?).await;
+                }
+            }
+        }
+    }
+    async fn run_to_disconnected(&mut self, stream: &mut TcpStream) {
+        if let Err(e) = stream.write_all(Disconnect::data()).await {
+            error!("{:?}", e);
+        }
+        if self.tx.send(NetworkEvent::Disconnected).await.is_err() {
+            error!("fail to send NetworkEvent::Disconnected");
+        }
+        self.state = NetworkState::Disconnected;
     }
 
     async fn network_disconnect(&mut self, error: String) {
-        self.is_connected = false;
-        if self
-            .tx
-            .send(NetworkStatus::Disconnect(error))
-            .await
-            .is_err()
-        {
+        todo!();
+        if self.tx.send(NetworkEvent::Disconnect(error)).await.is_err() {
             error!("");
         }
     }
@@ -132,24 +139,25 @@ impl TaskNetwork {
         }
         Ok(())
     }
-    async fn deal_inner_msg(&mut self, stream: &mut TcpStream, msg: Data) {
+    async fn deal_inner_msg(&mut self, stream: &mut TcpStream, msg: Data) -> Result<()> {
+        debug!("{:?}", msg);
+        // todo 考虑发布粘包
         match msg {
             Data::NetworkData(val) => {
-                let Err(e) = stream.write_all(val.as_ref().as_ref()).await else {
-                    val.done();
-                    return;
-                };
-                error!("{:?}", e);
-                self.network_disconnect(e.to_string()).await;
+                stream.write_all(val.as_ref().as_ref()).await?;
+                val.done();
             }
             Data::Reconnect => {
-                self.is_connected = false;
+                todo!();
             }
-            Data::Disconnect => {}
+            Data::Disconnect => {
+                self.state = NetworkState::ToDisconnect;
+            }
         }
+        Ok(())
     }
 
-    async fn try_connect(&mut self, buf: &mut BytesMut) -> TcpStream {
+    async fn run_connect(&mut self, buf: &mut BytesMut) -> TcpStream {
         loop {
             debug!("tcp connect……");
             match TcpStream::connect((self.addr.as_str(), self.port)).await {
@@ -168,9 +176,10 @@ impl TaskNetwork {
                                         error!("{:?}", e);
                                         continue;
                                     }
-                                    if self.is_connected {
-                                        return stream;
-                                    }
+                                    todo!();
+                                    // if self.is_connected {
+                                    //     return stream;
+                                    // }
                                 }
                                 Err(e) => {
                                     error!("{:?}", e);
@@ -222,8 +231,8 @@ impl TaskNetwork {
             // PacketType::Connect => Packet::Connect(Connect::read(fixed_header, packet)?),
             PacketType::ConnAck => {
                 let _ = ConnAck::read(fixed_header, packet)?;
-                self.is_connected = true;
-                self.tx.send(NetworkStatus::Connected).await?;
+                todo!();
+                self.tx.send(NetworkEvent::Connected).await?;
             }
             PacketType::Publish => {
                 self.tx_publish(Publish::read(fixed_header, packet)?).await;

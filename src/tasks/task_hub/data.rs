@@ -1,6 +1,6 @@
 use crate::datas::payload::Payload;
 use crate::tasks::task_client::data::{TracePublish, TraceSubscribe, TraceUnubscribe};
-use crate::tasks::task_network::NetworkStatus;
+use crate::tasks::task_network::NetworkEvent;
 use crate::v3_1_1::Publish;
 use crate::{ClientCommand, QoS};
 use bytes::Bytes;
@@ -83,11 +83,14 @@ impl Default for Reason {
     }
 }
 
-impl From<NetworkStatus> for State {
-    fn from(status: NetworkStatus) -> Self {
+impl From<NetworkEvent> for State {
+    fn from(status: NetworkEvent) -> Self {
         match status {
-            NetworkStatus::Connected => Self::Connected,
-            NetworkStatus::Disconnect(error) => Self::UnConnected(Reason::NetworkErr(error)),
+            NetworkEvent::Connected => Self::Connected,
+            NetworkEvent::Disconnect(error) => Self::UnConnected(Reason::NetworkErr(error)),
+            NetworkEvent::Disconnected => {
+                todo!()
+            }
         }
     }
 }
@@ -106,16 +109,37 @@ impl HubState {
             _ => false,
         }
     }
-    pub fn update_by_network_status(&self, status: &NetworkStatus) -> Self {
+    pub fn is_connected(&self) -> bool {
+        match self {
+            HubState::Connected => true,
+            _ => false,
+        }
+    }
+    pub fn is_to_stop(&self) -> bool {
+        match self {
+            HubState::ToStop => true,
+            _ => false,
+        }
+    }
+    pub fn is_stoped(&self) -> bool {
+        match self {
+            HubState::Stoped => true,
+            _ => false,
+        }
+    }
+    pub fn update_by_network_status(&self, status: &NetworkEvent) -> Self {
         match status {
-            NetworkStatus::Connected => match self {
+            NetworkEvent::Connected => match self {
                 HubState::ToConnect | HubState::Connected => Self::Connected,
                 HubState::ToStop | HubState::Stoped => Self::ToStop,
             },
-            NetworkStatus::Disconnect(_) => match self {
+            NetworkEvent::Disconnect(_) => match self {
                 HubState::ToConnect | HubState::Connected => Self::ToConnect,
                 HubState::ToStop | HubState::Stoped => Self::Stoped,
             },
+            _ => {
+                todo!()
+            }
         }
     }
     pub fn update_by_ping(&self, is_success: bool) -> Self {

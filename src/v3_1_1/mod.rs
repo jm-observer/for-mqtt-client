@@ -51,6 +51,9 @@ pub struct MqttOptions {
     /// If set to `true` MQTT acknowledgements are not sent automatically.
     /// Every incoming publish packet must be manually acknowledged with `client.ack(...)` method.
     manual_acks: bool,
+
+    /// 是否自动重连
+    auto_reconnect: bool,
 }
 
 impl MqttOptions {
@@ -77,7 +80,16 @@ impl MqttOptions {
             last_will: None,
             conn_timeout: 5,
             manual_acks: false,
+            auto_reconnect: false,
         }
+    }
+    /// 设置为自动重连，会默认设置clean_session=false
+    pub fn set_auto_reconnect(&mut self, auto_reconnect: bool) -> &mut Self {
+        self.auto_reconnect = auto_reconnect;
+        if self.auto_reconnect {
+            self.set_clean_session(false);
+        }
+        self
     }
 
     #[cfg(feature = "url")]

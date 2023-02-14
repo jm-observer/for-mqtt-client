@@ -1,9 +1,9 @@
 mod data;
 
-use crate::tasks::task_network::{Data, NetworkStatus, TaskNetwork};
+use crate::tasks::task_network::{Data, NetworkEvent, TaskNetwork};
 use crate::tasks::{BroadcastTx, Senders};
 use crate::v3_1_1::{qos, Connect, MqttOptions, Publish};
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use log::{debug, error, warn};
 use ringbuf::{Consumer, Producer};
 use std::collections::HashMap;
@@ -23,7 +23,7 @@ use crate::tasks::task_publish::{
     TaskPublishQos0, TaskPublishQos1, TaskPublishQos2, TaskPublishRxQos1, TaskPublishRxQos2,
 };
 use crate::tasks::task_subscribe::{TaskSubscribe, TaskUnsubscribe};
-use crate::{ClientCommand, QoS, QoSWithPacketId};
+use crate::{ClientCommand, QoS, QoSWithPacketId, TracePublish};
 pub use data::HubMsg;
 
 type SharedRb = ringbuf::SharedRb<u16, Vec<MaybeUninit<u16>>>;
@@ -34,7 +34,7 @@ pub struct TaskHub {
     state: HubState,
     rx: mpsc::Receiver<HubMsg>,
     rx_from_client: mpsc::Receiver<ClientCommand>,
-    rx_from_network: mpsc::Receiver<NetworkStatus>,
+    rx_from_network: mpsc::Receiver<NetworkEvent>,
     rx_publish: HashMap<u16, Publish>,
     rx_publish_id: HashMap<u16, u16>,
 }
@@ -71,6 +71,7 @@ impl TaskHub {
         network_task.run();
 
         spawn(async move {
+            // todo
             hub.run().await.unwrap();
         });
         (client, event_rx)
@@ -84,10 +85,10 @@ impl TaskHub {
         loop {
             match self.state {
                 HubState::ToConnect => {
-                    self.try_to_connect(&mut keep_alive).await;
+                    self.run_to_connect(&mut keep_alive).await;
                 }
                 HubState::Connected => {
-                    self._run(&mut a, &mut b, &mut keep_alive).await;
+                    self.run_connected(&mut a, &mut b, &mut keep_alive).await?;
                 }
                 HubState::ToStop => {
                     todo!()
@@ -99,24 +100,23 @@ impl TaskHub {
         }
     }
 
-    async fn _run(
+    async fn run_connected(
         &mut self,
         a: &mut Producer<u16, Arc<SharedRb>>,
         b: &mut Consumer<u16, Arc<SharedRb>>,
         keep_alive_time: &mut KeepAliveTime,
-    ) {
+    ) -> Result<()> {
         loop {
-            todo!();
+            if !self.state.is_connected() {
+                return Ok(());
+            }
             select! {
                 hub_msg = self.rx.recv() => match hub_msg {
                     Some(msg) => self.deal_hub_msg(msg, a, b, keep_alive_time).await,
                     None => todo!()
                 },
-                client_command = self.rx_from_client.recv() => match client_command {
-                    Some(client_command) => {
-                        todo!()
-                    },
-                    None => todo!()
+                client_command = self.rx_from_client.recv() => {
+                    self.deal_client_command(client_command.ok_or(anyhow!("rx_from_client.recv none"))?, b).await?;
                 },
                 network_status = self.rx_from_network.recv() => match network_status {
                     Some(network_status) => {
@@ -127,15 +127,18 @@ impl TaskHub {
             }
         }
     }
-    fn update_state_by_network_status(&mut self, state: NetworkStatus) {
+    fn update_state_by_network_status(&mut self, state: NetworkEvent) {
         debug!("update_state: {:?}", state);
         self.state = self.state.update_by_network_status(&state);
         match state {
-            NetworkStatus::Connected => {
+            NetworkEvent::Connected => {
                 self.senders.tx_to_user(MqttEvent::ConnectSuccess);
             }
-            NetworkStatus::Disconnect(msg) => {
+            NetworkEvent::Disconnect(msg) => {
                 self.senders.tx_to_user(MqttEvent::ConnectFail(msg));
+            }
+            _ => {
+                todo!()
             }
         }
     }
@@ -143,7 +146,7 @@ impl TaskHub {
         self.state = self.state.update_by_ping(is_success);
     }
     ///
-    async fn try_to_connect(&mut self, keep_alive_time: &mut KeepAliveTime) {
+    async fn run_to_connect(&mut self, keep_alive_time: &mut KeepAliveTime) {
         debug!("try to connect");
         loop {
             if self.state.is_to_connect() {
@@ -183,10 +186,12 @@ impl TaskHub {
                 self.init_keep_alive_check(keep_alive_time);
             }
             HubMsg::PingFail => {
-                self.update_state_by_ping(false);
-                if self.senders.tx_network.send(Data::Reconnect).await.is_err() {
-                    error!("")
-                }
+                // 需要再看看文档，看如何处理
+                todo!();
+                // self.update_state_by_ping(false);
+                // if self.senders.tx_network.send(Data::Reconnect).await.is_err() {
+                //     error!("")
+                // }
             }
             HubMsg::KeepAlive(keep_alive) => {
                 if *keep_alive_time == keep_alive {
@@ -234,50 +239,71 @@ impl TaskHub {
     async fn deal_client_command(
         &mut self,
         req: ClientCommand,
-        a: &mut Producer<u16, Arc<SharedRb>>,
         b: &mut Consumer<u16, Arc<SharedRb>>,
-        keep_alive_time: &mut KeepAliveTime,
-    ) {
+    ) -> Result<()> {
         match req {
-            ClientCommand::Subscribe(trace_subscribe) => {
-                TaskSubscribe::init(
-                    self.senders.clone(),
-                    trace_subscribe,
-                    self.request_id(b).await,
-                );
-            }
-            ClientCommand::Publish(trace_publish) => match trace_publish.qos {
-                QoS::AtMostOnce => {
-                    TaskPublishQos0::init(self.senders.clone(), trace_publish).await;
+            ClientCommand::Subscribe(trace_subscribe) => match self.state {
+                HubState::ToConnect => {
+                    todo!()
                 }
-                QoS::AtLeastOnce => {
-                    let pkid = self.request_id(b).await;
-                    TaskPublishQos1::init(self.senders.clone(), trace_publish, pkid).await;
+                HubState::Connected => {
+                    TaskSubscribe::init(
+                        self.senders.clone(),
+                        trace_subscribe,
+                        self.request_id(b).await?,
+                    );
                 }
-                QoS::ExactlyOnce => {
-                    let pkid = self.request_id(b).await;
-                    TaskPublishQos2::init(self.senders.clone(), trace_publish, pkid).await;
+                HubState::ToStop | HubState::Stoped => {
+                    todo!()
                 }
             },
-            ClientCommand::Unsubscribe(trace_unsubscribe) => {
-                TaskUnsubscribe::init(
-                    self.senders.clone(),
-                    trace_unsubscribe,
-                    self.request_id(b).await,
-                );
-            }
+            ClientCommand::Publish(trace_publish) => match self.state {
+                HubState::ToConnect => {
+                    todo!()
+                }
+                HubState::Connected => {
+                    self.publish_client_msg(trace_publish, b).await?;
+                }
+                HubState::ToStop | HubState::Stoped => {
+                    todo!()
+                }
+            },
+            ClientCommand::Unsubscribe(trace_unsubscribe) => match self.state {
+                HubState::ToConnect => {
+                    todo!()
+                }
+                HubState::Connected => {
+                    TaskUnsubscribe::init(
+                        self.senders.clone(),
+                        trace_unsubscribe,
+                        self.request_id(b).await?,
+                    );
+                }
+                HubState::ToStop | HubState::Stoped => {
+                    todo!()
+                }
+            },
             ClientCommand::Connect => {
-                todo!()
+                self.update_to_connect().await;
             }
             ClientCommand::Disconnect => {
-                todo!()
+                self.update_to_stop().await;
             }
         }
+        Ok(())
     }
-    async fn request_id(&mut self, b: &mut Consumer<u16, Arc<SharedRb>>) -> u16 {
+    async fn update_to_connect(&mut self) {
+        self.state = HubState::ToConnect;
+        // todo 启动相关任务
+    }
+    async fn update_to_stop(&mut self) {
+        self.state = HubState::ToStop;
+        // todo 停止相关任务
+    }
+    async fn request_id(&mut self, b: &mut Consumer<u16, Arc<SharedRb>>) -> Result<u16> {
         if let Some(id) = b.pop() {
             debug!("request id: {}", id);
-            return id;
+            return Ok(id);
         } else {
             todo!()
         }
@@ -291,6 +317,27 @@ impl TaskHub {
             self.options.keep_alive(),
             self.senders.tx_hub_msg.clone(),
         );
+    }
+
+    async fn publish_client_msg(
+        &mut self,
+        trace_publish: TracePublish,
+        b: &mut Consumer<u16, Arc<SharedRb>>,
+    ) -> Result<()> {
+        match trace_publish.qos {
+            QoS::AtMostOnce => {
+                TaskPublishQos0::init(self.senders.clone(), trace_publish).await;
+            }
+            QoS::AtLeastOnce => {
+                let packet_id = self.request_id(b).await?;
+                TaskPublishQos1::init(self.senders.clone(), trace_publish, packet_id).await;
+            }
+            QoS::ExactlyOnce => {
+                let packet_id = self.request_id(b).await?;
+                TaskPublishQos2::init(self.senders.clone(), trace_publish, packet_id).await;
+            }
+        }
+        Ok(())
     }
 }
 

@@ -4,10 +4,49 @@ use std::fmt::{Debug, Formatter};
 use std::ops::Deref;
 use std::sync::Arc;
 
-#[derive(Debug, Clone)]
-/// broadcast network status
-pub enum NetworkStatus {
+pub enum NetworkState {
+    ToConnect,
     Connected,
+    ToDisconnect,
+    Disconnected,
+}
+
+impl NetworkState {
+    pub fn is_disconnected(&self) -> bool {
+        if let Self::Disconnected = self {
+            true
+        } else {
+            false
+        }
+    }
+    pub fn is_to_disconnected(&self) -> bool {
+        if let Self::ToDisconnect = self {
+            true
+        } else {
+            false
+        }
+    }
+    pub fn is_to_connect(&self) -> bool {
+        if let Self::ToConnect = self {
+            true
+        } else {
+            false
+        }
+    }
+    pub fn is_connected(&self) -> bool {
+        if let Self::Connected = self {
+            true
+        } else {
+            false
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+/// broadcast network event
+pub enum NetworkEvent {
+    Connected,
+    Disconnected,
     Disconnect(String),
 }
 
