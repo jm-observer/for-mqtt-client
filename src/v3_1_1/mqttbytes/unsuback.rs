@@ -1,6 +1,7 @@
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 
 use crate::v3_1_1::mqttbytes::{read_u16, Error, FixedHeader};
+use crate::v3_1_1::PacketParseError;
 
 /// Acknowledgement to unsubscribe
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -13,9 +14,9 @@ impl UnsubAck {
         UnsubAck { packet_id }
     }
 
-    pub fn read(fixed_header: FixedHeader, mut bytes: Bytes) -> Result<Self, Error> {
+    pub fn read(fixed_header: FixedHeader, mut bytes: Bytes) -> Result<Self, PacketParseError> {
         if fixed_header.remaining_len != 2 {
-            return Err(Error::PayloadSizeIncorrect);
+            return Err(PacketParseError::PayloadSizeIncorrect);
         }
 
         let variable_header_index = fixed_header.fixed_header_len;

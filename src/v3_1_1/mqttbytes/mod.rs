@@ -39,66 +39,68 @@ pub use unsubscribe::*;
 /// Encapsulates all MQTT packet types
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Packet {
-    Connect(Connect),
     ConnAck(ConnAck),
     Publish(Publish),
     PubAck(PubAck),
     PubRec(PubRec),
     PubRel(PubRel),
     PubComp(PubComp),
-    Subscribe(Subscribe),
     SubAck(SubAck),
-    Unsubscribe(Unsubscribe),
     UnsubAck(UnsubAck),
-    PingReq,
     PingResp,
-    Disconnect,
 }
 
-/// Reads a stream of bytes and extracts next MQTT packet out of it
-pub fn read(stream: &mut BytesMut, max_size: usize) -> Result<Packet, Error> {
-    let fixed_header = check(stream.iter(), max_size)?;
+impl Packet {
+    pub fn packet_ty(&self) -> PacketType {
+        match self {
+            Packet::ConnAck(_) => PacketType::ConnAck,
+            Packet::Publish(_) => PacketType::Publish,
+            Packet::PubAck(_) => PacketType::PubAck,
+            Packet::PubRec(_) => PacketType::PubRec,
+            Packet::PubRel(_) => PacketType::PubRel,
+            Packet::PubComp(_) => PacketType::PubComp,
+            Packet::SubAck(_) => PacketType::SubAck,
+            Packet::UnsubAck(_) => PacketType::UnsubAck,
+            Packet::PingResp => PacketType::PingResp,
+        }
+    }
+}
 
-    // Test with a stream with exactly the size to check border panics
+/// 解析包。数据截断、丢弃等逻辑：done
+pub fn read_from_network(stream: &mut BytesMut) -> Result<Packet, PacketParseError> {
+    let fixed_header = match parse_fixed_header(stream.iter()) {
+        Ok(fixed_header) => fixed_header,
+        Err(err) => {
+            if err.to_discard() {
+                // discard
+                let _ = stream.split_to(stream.len());
+            }
+            return Err(err.into());
+        }
+    };
     let packet = stream.split_to(fixed_header.frame_length());
     let packet_type = fixed_header.packet_type()?;
-
-    if fixed_header.remaining_len == 0 {
-        // no payload packets
-        return match packet_type {
-            PacketType::PingReq => Ok(Packet::PingReq),
-            PacketType::PingResp => Ok(Packet::PingResp),
-            PacketType::Disconnect => Ok(Packet::Disconnect),
-            _ => Err(Error::PayloadRequired),
-        };
-    }
-
     let packet = packet.freeze();
     let packet = match packet_type {
-        PacketType::Connect => Packet::Connect(Connect::read(fixed_header, packet)?),
         PacketType::ConnAck => Packet::ConnAck(ConnAck::read(fixed_header, packet)?),
         PacketType::Publish => Packet::Publish(Publish::read(fixed_header, packet)?),
         PacketType::PubAck => Packet::PubAck(PubAck::read(fixed_header, packet)?),
         PacketType::PubRec => Packet::PubRec(PubRec::read(fixed_header, packet)?),
         PacketType::PubRel => Packet::PubRel(PubRel::read(fixed_header, packet)?),
         PacketType::PubComp => Packet::PubComp(PubComp::read(fixed_header, packet)?),
-        PacketType::Subscribe => Packet::Subscribe(Subscribe::read(fixed_header, packet)?),
         PacketType::SubAck => Packet::SubAck(SubAck::read(fixed_header, packet)?),
-        PacketType::Unsubscribe => Packet::Unsubscribe(Unsubscribe::read(fixed_header, packet)?),
         PacketType::UnsubAck => Packet::UnsubAck(UnsubAck::read(fixed_header, packet)?),
-        PacketType::PingReq => Packet::PingReq,
         PacketType::PingResp => Packet::PingResp,
-        PacketType::Disconnect => Packet::Disconnect,
+        _ => return Err(PacketParseError::InvalidPacketType(packet_type as u8)),
     };
-
     Ok(packet)
 }
 
 /// Error during serialization and deserialization
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
-    #[error("Expected Connect, received: {0:?}")]
-    NotConnect(PacketType),
+    #[error("Expected ConnAck, received: {0:?}")]
+    NotConnAck(PacketType),
     #[error("Unexpected Connect")]
     UnexpectedConnect,
     #[error("Invalid Connect return code: {0}")]
@@ -133,8 +135,6 @@ pub enum Error {
     BoundaryCrossed(usize),
     #[error("Malformed packet")]
     MalformedPacket,
-    #[error("Malformed remaining length")]
-    MalformedRemainingLength,
     #[error("A Subscribe packet must contain atleast one filter")]
     EmptySubscription,
     /// More bytes required to frame packet. Argument
@@ -142,6 +142,69 @@ pub enum Error {
     /// proceed further
     #[error("At least {0} more bytes required to frame packet")]
     InsufficientBytes(usize),
+}
+
+/// Error during serialization and deserialization
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FixedHeaderError {
+    InsufficientBytes(usize),
+    MalformedRemainingLength,
+}
+
+impl FixedHeaderError {
+    pub fn to_discard(&self) -> bool {
+        *self == Self::MalformedRemainingLength
+    }
+}
+impl From<FixedHeaderError> for PacketParseError {
+    fn from(value: FixedHeaderError) -> Self {
+        match value {
+            FixedHeaderError::InsufficientBytes(len) => Self::InsufficientBytes(len),
+            FixedHeaderError::MalformedRemainingLength => Self::MalformedRemainingLength,
+        }
+    }
+}
+/// Error during serialization and deserialization
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum PacketParseError {
+    #[error("Invalid Connect return code: {0}")]
+    InvalidConnectReturnCode(u8),
+    #[error("Invalid protocol")]
+    InvalidProtocol,
+    #[error("Invalid protocol level: {0}")]
+    InvalidProtocolLevel(u8),
+    #[error("Incorrect packet format")]
+    IncorrectPacketFormat,
+    #[error("Invalid packet type: {0}")]
+    InvalidPacketType(u8),
+    #[error("Invalid property type: {0}")]
+    InvalidPropertyType(u8),
+    #[error("Invalid QoS level: {0}")]
+    InvalidQoS(u8),
+    #[error("Invalid subscribe reason code: {0}")]
+    InvalidSubscribeReasonCode(u8),
+    #[error("Packet id Zero")]
+    PacketIdZero,
+    #[error("Payload size is incorrect")]
+    PayloadSizeIncorrect,
+    #[error("payload is too long")]
+    PayloadTooLong,
+    #[error("payload size limit exceeded: {0}")]
+    PayloadSizeLimitExceeded(usize),
+    #[error("Payload required")]
+    PayloadRequired,
+    #[error("Topic is not UTF-8")]
+    TopicNotUtf8,
+    #[error("Promised boundary crossed: {0}")]
+    BoundaryCrossed(usize),
+    #[error("Malformed packet")]
+    MalformedPacket,
+    #[error("A Subscribe packet must contain atleast one filter")]
+    EmptySubscription,
+    #[error("At least {0} more bytes required to frame packet")]
+    InsufficientBytes(usize),
+    #[error("Malformed remaining length")]
+    MalformedRemainingLength,
 }
 
 /// MQTT packet type
@@ -206,7 +269,7 @@ impl FixedHeader {
         }
     }
 
-    pub fn packet_type(&self) -> Result<PacketType, Error> {
+    pub fn packet_type(&self) -> Result<PacketType, PacketParseError> {
         let num = self.byte1 >> 4;
         match num {
             1 => Ok(PacketType::Connect),
@@ -223,7 +286,7 @@ impl FixedHeader {
             12 => Ok(PacketType::PingReq),
             13 => Ok(PacketType::PingResp),
             14 => Ok(PacketType::Disconnect),
-            _ => Err(Error::InvalidPacketType(num)),
+            _ => Err(PacketParseError::InvalidPacketType(num)),
         }
     }
 
@@ -238,41 +301,26 @@ impl FixedHeader {
     }
 }
 
-/// Checks if the stream has enough bytes to frame a packet and returns fixed header
-/// only if a packet can be framed with existing bytes in the `stream`.
-/// The passed stream doesn't modify parent stream's cursor. If this function
-/// returned an error, next `check` on the same parent stream is forced start
-/// with cursor at 0 again (Iter is owned. Only Iter's cursor is changed internally)
-pub fn check(stream: Iter<u8>, max_packet_size: usize) -> Result<FixedHeader, Error> {
-    // Create fixed header if there are enough bytes in the stream
-    // to frame full packet
-    let stream_len = stream.len();
-    let fixed_header = parse_fixed_header(stream)?;
-
-    // Don't let rogue connections attack with huge payloads.
-    // Disconnect them before reading all that data
-    if fixed_header.remaining_len > max_packet_size {
-        return Err(Error::PayloadSizeLimitExceeded(fixed_header.remaining_len));
-    }
-
-    // If the current call fails due to insufficient bytes in the stream,
-    // after calculating remaining length, we extend the stream
-    let frame_length = fixed_header.frame_length();
-    if stream_len < frame_length {
-        return Err(Error::InsufficientBytes(frame_length - stream_len));
-    }
-
-    Ok(fixed_header)
-}
+// pub fn check(stream: Iter<u8>) -> Result<FixedHeader, Error> {
+//     let stream_len = stream.len();
+//     let fixed_header = parse_fixed_header(stream)?;
+//     if fixed_header.remaining_len > max_packet_size {
+//         return Err(Error::PayloadSizeLimitExceeded(fixed_header.remaining_len));
+//     }
+//     let frame_length = fixed_header.frame_length();
+//     if stream_len < frame_length {
+//         return Err(Error::InsufficientBytes(frame_length - stream_len));
+//     }
+//     Ok(fixed_header)
+// }
 
 /// Parses fixed header
-fn parse_fixed_header(mut stream: Iter<u8>) -> Result<FixedHeader, Error> {
+fn parse_fixed_header(mut stream: Iter<u8>) -> Result<FixedHeader, FixedHeaderError> {
     // At least 2 bytes are necessary to frame a packet
     let stream_len = stream.len();
     if stream_len < 2 {
-        return Err(Error::InsufficientBytes(2 - stream_len));
+        return Err(FixedHeaderError::InsufficientBytes(2 - stream_len));
     }
-
     let byte1 = stream.next().unwrap();
     let (len_len, len) = length(stream)?;
 
@@ -282,7 +330,7 @@ fn parse_fixed_header(mut stream: Iter<u8>) -> Result<FixedHeader, Error> {
 /// Parses variable byte integer in the stream and returns the length
 /// and number of bytes that make it. Used for remaining length calculation
 /// as well as for calculating property lengths
-fn length(stream: Iter<u8>) -> Result<(usize, usize), Error> {
+fn length(stream: Iter<u8>) -> Result<(usize, usize), FixedHeaderError> {
     let mut len: usize = 0;
     let mut len_len = 0;
     let mut done = false;
@@ -308,21 +356,21 @@ fn length(stream: Iter<u8>) -> Result<(usize, usize), Error> {
         // Only a max of 4 bytes allowed for remaining length
         // more than 4 shifts (0, 7, 14, 21) implies bad length
         if shift > 21 {
-            return Err(Error::MalformedRemainingLength);
+            return Err(FixedHeaderError::MalformedRemainingLength);
         }
     }
 
     // Not enough bytes to frame remaining length. wait for
     // one more byte
     if !done {
-        return Err(Error::InsufficientBytes(1));
+        return Err(FixedHeaderError::InsufficientBytes(1));
     }
 
     Ok((len_len, len))
 }
 
 /// Reads a series of bytes with a length from a byte stream
-fn read_mqtt_bytes(stream: &mut Bytes) -> Result<Bytes, Error> {
+fn read_mqtt_bytes(stream: &mut Bytes) -> Result<Bytes, PacketParseError> {
     let len = read_u16(stream)? as usize;
 
     // Prevent attacks with wrong remaining length. This method is used in
@@ -330,18 +378,18 @@ fn read_mqtt_bytes(stream: &mut Bytes) -> Result<Bytes, Error> {
     // reading variable len string or bytes doesn't cross promised boundary
     // with `read_fixed_header()`
     if len > stream.len() {
-        return Err(Error::BoundaryCrossed(len));
+        return Err(PacketParseError::BoundaryCrossed(len));
     }
 
     Ok(stream.split_to(len))
 }
 
 /// Reads a string from bytes stream
-fn read_mqtt_string(stream: &mut Bytes) -> Result<String, Error> {
+fn read_mqtt_string(stream: &mut Bytes) -> Result<String, PacketParseError> {
     let s = read_mqtt_bytes(stream)?;
     match String::from_utf8(s.to_vec()) {
         Ok(v) => Ok(v),
-        Err(_e) => Err(Error::TopicNotUtf8),
+        Err(_e) => Err(PacketParseError::TopicNotUtf8),
     }
 }
 
@@ -382,12 +430,12 @@ fn write_remaining_length(stream: &mut BytesMut, len: usize) -> usize {
 }
 
 /// Maps a number to QoS
-pub fn qos(num: u8) -> Result<QoS, Error> {
+pub fn qos(num: u8) -> Result<QoS, PacketParseError> {
     match num {
         0 => Ok(QoS::AtMostOnce),
         1 => Ok(QoS::AtLeastOnce),
         2 => Ok(QoS::ExactlyOnce),
-        qos => Err(Error::InvalidQoS(qos)),
+        qos => Err(PacketParseError::InvalidQoS(qos)),
     }
 }
 
@@ -396,18 +444,17 @@ pub fn qos(num: u8) -> Result<QoS, Error> {
 /// packet id or qos not being present. In cases where `read_mqtt_string` or
 /// `read_mqtt_bytes` exhausted remaining length but packet framing expects to
 /// parse qos next, these pre checks will prevent `bytes` crashes
-fn read_u16(stream: &mut Bytes) -> Result<u16, Error> {
+fn read_u16(stream: &mut Bytes) -> Result<u16, PacketParseError> {
     if stream.len() < 2 {
-        return Err(Error::MalformedPacket);
+        return Err(PacketParseError::MalformedPacket);
     }
 
     Ok(stream.get_u16())
 }
 
-fn read_u8(stream: &mut Bytes) -> Result<u8, Error> {
+fn read_u8(stream: &mut Bytes) -> Result<u8, PacketParseError> {
     if stream.is_empty() {
-        return Err(Error::MalformedPacket);
+        return Err(PacketParseError::MalformedPacket);
     }
-
     Ok(stream.get_u8())
 }

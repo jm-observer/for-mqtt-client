@@ -22,7 +22,7 @@ impl PubAck {
         2
     }
 
-    pub fn read(fixed_header: FixedHeader, mut bytes: Bytes) -> Result<Self, Error> {
+    pub fn read(fixed_header: FixedHeader, mut bytes: Bytes) -> Result<Self, PacketParseError> {
         let variable_header_index = fixed_header.fixed_header_len;
         bytes.advance(variable_header_index);
         let pkid = read_u16(&mut bytes)?;

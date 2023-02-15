@@ -1,8 +1,11 @@
 use crate::tasks::Receipter;
+use crate::v3_1_1::{ConnectReturnCode, FixedHeaderError, PacketParseError, PacketType};
 use bytes::Bytes;
 use std::fmt::{Debug, Formatter};
 use std::ops::Deref;
 use std::sync::Arc;
+use tokio::io;
+use tokio::sync::broadcast;
 
 pub enum NetworkState {
     ToConnect,
@@ -52,7 +55,7 @@ pub enum NetworkEvent {
 
 pub enum Data {
     NetworkData(DataWaitingToBeSend),
-    Reconnect,
+    // Reconnect,
     Disconnect,
 }
 
@@ -61,9 +64,6 @@ impl Debug for Data {
         match self {
             Data::NetworkData(_) => {
                 write!(f, "NetworkData")
-            }
-            Data::Reconnect => {
-                write!(f, "Reconnect")
             }
             Data::Disconnect => {
                 write!(f, "Disconnect")
@@ -100,5 +100,46 @@ impl Deref for DataWaitingToBeSend {
 
     fn deref(&self) -> &Self::Target {
         &self.data
+    }
+}
+
+/// Error during serialization and deserialization
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum Error {
+    #[error("Network error")]
+    NetworkError(String),
+    #[error("parse packet error")]
+    PacketError(#[from] PacketParseError),
+    #[error("recv data fail")]
+    RecvDataFail,
+    #[error("channel abnormal")]
+    ChannelAbnormal,
+}
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum ToConnectError {
+    #[error("Expected ConnAck, received: {0:?}")]
+    NotConnAck(PacketType),
+    // #[error("Unexpected ConnAck")]
+    // UnexpectedConnAck,
+    #[error("Network error")]
+    NetworkError(String),
+    #[error("parse packet error")]
+    PacketError(#[from] PacketParseError),
+    #[error("broker refuse to connect")]
+    BrokerRefuse(ConnectReturnCode),
+}
+impl From<io::Error> for ToConnectError {
+    fn from(err: io::Error) -> Self {
+        Self::NetworkError(err.to_string())
+    }
+}
+impl<T> From<broadcast::error::SendError<T>> for Error {
+    fn from(_: broadcast::error::SendError<T>) -> Self {
+        Self::ChannelAbnormal
+    }
+}
+impl From<io::Error> for Error {
+    fn from(err: io::Error) -> Self {
+        Self::NetworkError(err.to_string())
     }
 }

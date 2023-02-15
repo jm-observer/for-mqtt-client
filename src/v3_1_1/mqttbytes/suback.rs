@@ -21,13 +21,13 @@ impl SubAck {
         2 + self.return_codes.len()
     }
 
-    pub fn read(fixed_header: FixedHeader, mut bytes: Bytes) -> Result<Self, Error> {
+    pub fn read(fixed_header: FixedHeader, mut bytes: Bytes) -> Result<Self, PacketParseError> {
         let variable_header_index = fixed_header.fixed_header_len;
         bytes.advance(variable_header_index);
         let pkid = read_u16(&mut bytes)?;
 
         if !bytes.has_remaining() {
-            return Err(Error::MalformedPacket);
+            return Err(PacketParseError::MalformedPacket);
         }
 
         let mut return_codes = Vec::new();
@@ -69,7 +69,7 @@ pub enum SubscribeReasonCode {
 }
 
 impl TryFrom<u8> for SubscribeReasonCode {
-    type Error = super::Error;
+    type Error = PacketParseError;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         let v = match value {
@@ -77,7 +77,7 @@ impl TryFrom<u8> for SubscribeReasonCode {
             1 => SubscribeReasonCode::Success(QoS::AtLeastOnce),
             2 => SubscribeReasonCode::Success(QoS::ExactlyOnce),
             128 => SubscribeReasonCode::Failure,
-            v => return Err(super::Error::InvalidSubscribeReasonCode(v)),
+            v => return Err(PacketParseError::InvalidSubscribeReasonCode(v)),
         };
 
         Ok(v)

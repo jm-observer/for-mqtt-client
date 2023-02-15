@@ -41,7 +41,7 @@ impl Subscribe {
         2 + self.filters.iter().fold(0, |s, t| s + t.len())
     }
 
-    pub fn read(fixed_header: FixedHeader, mut bytes: Bytes) -> Result<Self, Error> {
+    pub fn read(fixed_header: FixedHeader, mut bytes: Bytes) -> Result<Self, PacketParseError> {
         let variable_header_index = fixed_header.fixed_header_len;
         bytes.advance(variable_header_index);
 
@@ -62,7 +62,7 @@ impl Subscribe {
         }
 
         match filters.len() {
-            0 => Err(Error::EmptySubscription),
+            0 => Err(PacketParseError::EmptySubscription),
             _ => Ok(Subscribe {
                 packet_id: pkid,
                 filters,

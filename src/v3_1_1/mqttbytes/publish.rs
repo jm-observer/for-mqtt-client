@@ -42,7 +42,7 @@ impl Publish {
         }
     }
 
-    pub fn read(fixed_header: FixedHeader, mut bytes: Bytes) -> Result<Self, Error> {
+    pub fn read(fixed_header: FixedHeader, mut bytes: Bytes) -> Result<Self, PacketParseError> {
         let qos = qos((fixed_header.byte1 & 0b0110) >> 1)?;
         let dup = (fixed_header.byte1 & 0b1000) != 0;
         let retain = (fixed_header.byte1 & 0b0001) != 0;

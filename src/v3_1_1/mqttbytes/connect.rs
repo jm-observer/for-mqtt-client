@@ -75,7 +75,7 @@ impl Connect {
         len
     }
 
-    pub fn read(fixed_header: FixedHeader, mut bytes: Bytes) -> Result<Connect, Error> {
+    pub fn read(fixed_header: FixedHeader, mut bytes: Bytes) -> Result<Connect, PacketParseError> {
         let variable_header_index = fixed_header.fixed_header_len;
         bytes.advance(variable_header_index);
 
@@ -83,13 +83,13 @@ impl Connect {
         let protocol_name = read_mqtt_string(&mut bytes)?;
         let protocol_level = read_u8(&mut bytes)?;
         if protocol_name != "MQTT" {
-            return Err(Error::InvalidProtocol);
+            return Err(PacketParseError::InvalidProtocol);
         }
 
         let protocol = match protocol_level {
             4 => Protocol::V4,
             5 => Protocol::V5,
-            num => return Err(Error::InvalidProtocolLevel(num)),
+            num => return Err(PacketParseError::InvalidProtocolLevel(num)),
         };
 
         let connect_flags = read_u8(&mut bytes)?;
@@ -178,10 +178,10 @@ impl LastWill {
         len
     }
 
-    fn read(connect_flags: u8, bytes: &mut Bytes) -> Result<Option<LastWill>, Error> {
+    fn read(connect_flags: u8, bytes: &mut Bytes) -> Result<Option<LastWill>, PacketParseError> {
         let last_will = match connect_flags & 0b100 {
             0 if (connect_flags & 0b0011_1000) != 0 => {
-                return Err(Error::IncorrectPacketFormat);
+                return Err(PacketParseError::IncorrectPacketFormat);
             }
             0 => None,
             _ => {
@@ -228,7 +228,7 @@ impl Login {
         }
     }
 
-    fn read(connect_flags: u8, bytes: &mut Bytes) -> Result<Option<Login>, Error> {
+    fn read(connect_flags: u8, bytes: &mut Bytes) -> Result<Option<Login>, PacketParseError> {
         let username = Arc::new(match connect_flags & 0b1000_0000 {
             0 => String::new(),
             _ => read_mqtt_string(bytes)?,

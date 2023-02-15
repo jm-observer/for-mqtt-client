@@ -39,7 +39,7 @@ impl ConnAck {
         1 + 1
     }
 
-    pub fn read(fixed_header: FixedHeader, mut bytes: Bytes) -> Result<Self, Error> {
+    pub fn read(fixed_header: FixedHeader, mut bytes: Bytes) -> Result<Self, PacketParseError> {
         let variable_header_index = fixed_header.fixed_header_len;
         bytes.advance(variable_header_index);
 
@@ -69,7 +69,7 @@ impl ConnAck {
 }
 
 /// Connection return code type
-fn connect_return(num: u8) -> Result<ConnectReturnCode, Error> {
+fn connect_return(num: u8) -> Result<ConnectReturnCode, PacketParseError> {
     match num {
         0 => Ok(ConnectReturnCode::Success),
         1 => Ok(ConnectReturnCode::RefusedProtocolVersion),
@@ -77,7 +77,7 @@ fn connect_return(num: u8) -> Result<ConnectReturnCode, Error> {
         3 => Ok(ConnectReturnCode::ServiceUnavailable),
         4 => Ok(ConnectReturnCode::BadUserNamePassword),
         5 => Ok(ConnectReturnCode::NotAuthorized),
-        num => Err(Error::InvalidConnectReturnCode(num)),
+        num => Err(PacketParseError::InvalidConnectReturnCode(num)),
     }
 }
 
