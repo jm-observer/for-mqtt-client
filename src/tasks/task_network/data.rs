@@ -59,6 +59,16 @@ pub enum Data {
     Disconnect,
 }
 
+impl Data {
+    pub fn is_network_data(&self) -> bool {
+        if let Self::NetworkData(_) = self {
+            true
+        } else {
+            false
+        }
+    }
+}
+
 impl Debug for Data {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {

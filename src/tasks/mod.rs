@@ -14,7 +14,7 @@ pub use task_subscribe::TaskSubscribe;
 
 use crate::datas::id::Id;
 use crate::tasks::task_hub::HubMsg;
-use crate::tasks::task_network::{Data, DataWaitingToBeSend};
+use crate::tasks::task_network::{Data, DataWaitingToBeSend, NetworkEvent};
 use crate::tasks::task_publish::PublishMsg;
 use crate::tasks::task_subscribe::SubscribeMsg;
 use crate::v3_1_1::{
@@ -39,7 +39,6 @@ pub struct BroadcastTx {
     tx_unsub_ack: Sender<UnsubAck>,
     tx_ping: Sender<PingResp>,
     tx_connect: Sender<ConnAck>,
-    tx_user: Sender<MqttEvent>,
 }
 
 impl BroadcastTx {
@@ -53,7 +52,6 @@ impl BroadcastTx {
         let (tx_unsub_ack, _) = channel(capacity);
         let (tx_ping, _) = channel(capacity);
         let (tx_connect, _) = channel(capacity);
-        let (tx_user, _) = channel(capacity);
         Self {
             tx_publish,
             tx_pub_ack,
@@ -64,37 +62,47 @@ impl BroadcastTx {
             tx_unsub_ack,
             tx_ping,
             tx_connect,
-            tx_user,
         }
     }
 }
 
 #[derive(Clone)]
 pub struct Senders {
-    tx_network: mpsc::Sender<Data>,
     tx_hub_msg: mpsc::Sender<HubMsg>,
-    tx_client_command: mpsc::Sender<ClientCommand>,
+    tx_hub_network_event: mpsc::Sender<NetworkEvent>,
+    tx_network_data: mpsc::Sender<Data>,
+    tx_to_user: Sender<MqttEvent>,
     broadcast_tx: BroadcastTx,
 }
 
 impl Senders {
     pub fn init(
-        tx_network_writer: mpsc::Sender<Data>,
-        tx_hub: mpsc::Sender<HubMsg>,
-        tx_client_command: mpsc::Sender<ClientCommand>,
-    ) -> Self {
-        Self {
-            tx_network: tx_network_writer,
-            tx_hub_msg: tx_hub,
-            broadcast_tx: BroadcastTx::init(1024),
-            tx_client_command,
-        }
-    }
-    pub fn rx_user(&self) -> Receiver<MqttEvent> {
-        self.broadcast_tx.tx_user.subscribe()
+        buffer: usize,
+        tx_to_user: Sender<MqttEvent>,
+    ) -> (
+        Senders,
+        mpsc::Receiver<HubMsg>,
+        mpsc::Receiver<NetworkEvent>,
+        mpsc::Receiver<Data>,
+    ) {
+        let (tx_hub_msg, rx_hub_msg) = mpsc::channel(buffer);
+        let (tx_hub_network_event, rx_hub_network_event) = mpsc::channel(buffer);
+        let (tx_network_data, rx_network_data) = mpsc::channel(buffer);
+        (
+            Self {
+                tx_hub_msg,
+                tx_hub_network_event,
+                tx_network_data,
+                tx_to_user,
+                broadcast_tx: BroadcastTx::init(1024),
+            },
+            rx_hub_msg,
+            rx_hub_network_event,
+            rx_network_data,
+        )
     }
     pub fn tx_to_user<T: Into<MqttEvent>>(&self, msg: T) {
-        if self.broadcast_tx.tx_user.send(msg.into()).is_err() {
+        if self.tx_to_user.send(msg.into()).is_err() {
             warn!("fail to tx mqtt event")
         }
     }
@@ -106,13 +114,13 @@ impl Senders {
     }
     pub async fn tx_network_default<T: Into<Arc<Bytes>>>(&self, bytes: T) -> Result<Receipt> {
         let (receipter, rx) = Receipter::default();
-        self.tx_network
+        self.tx_network_data
             .send(DataWaitingToBeSend::init(bytes.into(), Some(receipter)).into())
             .await?;
         Ok(rx.await?)
     }
     pub async fn tx_network_without_receipt<T: Into<Arc<Bytes>>>(&self, bytes: T) -> Result<()> {
-        self.tx_network
+        self.tx_network_data
             .send(DataWaitingToBeSend::init(bytes.into(), None).into())
             .await?;
         Ok(())

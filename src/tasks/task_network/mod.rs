@@ -30,21 +30,22 @@ enum Command {}
 pub struct TaskNetwork {
     addr: String,
     port: u16,
-    connect_packet: Arc<Bytes>,
+    connect_packet: Bytes,
     senders: Senders,
     rx: mpsc::Receiver<Data>,
-    tx: mpsc::Sender<NetworkEvent>,
+    // tx: mpsc::Sender<NetworkEvent>,
     state: NetworkState,
 }
 
+/// 一旦断开就不再连接，交由hub去维护后续的连接
 impl TaskNetwork {
     pub fn init(
         addr: String,
         port: u16,
         inner_tx: Senders,
         rx: mpsc::Receiver<Data>,
-        connect_packet: Arc<Bytes>,
-        tx: mpsc::Sender<NetworkEvent>,
+        connect_packet: Bytes,
+        // tx: mpsc::Sender<NetworkEvent>,
     ) -> Self {
         Self {
             addr,
@@ -53,13 +54,18 @@ impl TaskNetwork {
             rx,
             state: NetworkState::ToConnect,
             connect_packet,
-            tx,
+            // tx,
         }
     }
     pub fn run(mut self) {
         tokio::spawn(async move {
             if let Err(e) = self._run().await {
                 error!("{:?}", e);
+                let _ = self
+                    .senders
+                    .tx_hub_network_event
+                    .send(NetworkEvent::Disconnect(e.to_string()))
+                    .await;
             }
         });
     }
@@ -75,7 +81,7 @@ impl TaskNetwork {
                 debug!("tcp connect……");
                 self.run_connected(&mut stream, &mut buf).await?;
             } else if self.state.is_to_disconnected() {
-                // self.run_to_disconnected(stream).await;
+                self.run_to_disconnected(&mut stream).await?;
             } else {
                 break;
             }
@@ -104,21 +110,14 @@ impl TaskNetwork {
             }
         }
     }
-    async fn run_to_disconnected(&mut self, stream: &mut TcpStream) {
-        if let Err(e) = stream.write_all(Disconnect::data()).await {
-            error!("{:?}", e);
-        }
-        if self.tx.send(NetworkEvent::Disconnected).await.is_err() {
-            error!("fail to send NetworkEvent::Disconnected");
-        }
+    async fn run_to_disconnected(&mut self, stream: &mut TcpStream) -> Result<()> {
+        stream.write_all(Disconnect::data()).await?;
+        self.senders
+            .tx_hub_network_event
+            .send(NetworkEvent::Disconnected)
+            .await?;
         self.state = NetworkState::Disconnected;
-    }
-
-    async fn network_disconnect(&mut self, error: String) {
-        todo!();
-        // if self.tx.send(NetworkEvent::Disconnect(error)).await.is_err() {
-        //     error!("");
-        // }
+        Ok(())
     }
 
     async fn deal_connected_network_packet(&mut self, buf: &mut BytesMut) -> Result<(), Error> {
@@ -167,17 +166,40 @@ impl TaskNetwork {
             }
         }
     }
-    async fn deal_inner_msg(&mut self, stream: &mut TcpStream, msg: Data) -> Result<(), Error> {
+    async fn deal_inner_msg(&mut self, stream: &mut TcpStream, mut msg: Data) -> Result<(), Error> {
         debug!("{:?}", msg);
+
         // todo 考虑发布粘包
+        let mut other_msg: bool = false;
+        let mut to_send_datas = Vec::new();
         match msg {
             Data::NetworkData(val) => {
-                stream.write_all(val.as_ref().as_ref()).await?;
-                val.done();
+                to_send_datas.push(val);
             }
             Data::Disconnect => {
                 self.state = NetworkState::ToDisconnect;
+                return Ok(());
             }
+        }
+        while let Ok(data) = self.rx.try_recv() {
+            match data {
+                Data::NetworkData(val) => {
+                    to_send_datas.push(val);
+                }
+                Data::Disconnect => {
+                    other_msg = true;
+                    break;
+                }
+            }
+        }
+        for data in to_send_datas.iter() {
+            stream.write_all(data.data.as_ref()).await?;
+        }
+        for data in to_send_datas {
+            data.done();
+        }
+        if other_msg {
+            self.state = NetworkState::ToDisconnect;
         }
         Ok(())
     }
@@ -186,7 +208,10 @@ impl TaskNetwork {
         loop {
             match self._run_to_connect(buf).await {
                 Ok(stream) => {
-                    self.tx.send(NetworkEvent::Connected).await?;
+                    self.senders
+                        .tx_hub_network_event
+                        .send(NetworkEvent::Connected)
+                        .await?;
                     self.state = NetworkState::Connected;
                     return Ok(stream);
                 }
@@ -213,86 +238,6 @@ impl TaskNetwork {
         } else {
             Err(ToConnectError::BrokerRefuse(ack.code))
         }
-    }
-
-    /// Reads a stream of bytes and extracts next MQTT packet out of it
-    async fn parse(&mut self, stream: &mut BytesMut, max_size: usize) -> anyhow::Result<()> {
-        todo!()
-        // let fixed_header = check(stream.iter(), max_size)?;
-        // let packet = stream.split_to(fixed_header.frame_length());
-        // let packet_type = fixed_header.packet_type()?;
-        // debug!("{:?}", packet_type);
-        // if fixed_header.remaining_len() == 0 {
-        //     // no payload packets
-        //     return match packet_type {
-        //         PacketType::PingReq => {
-        //             warn!("should not receive pingreq");
-        //             Ok(())
-        //         }
-        //         PacketType::PingResp => {
-        //             self.senders
-        //                 .broadcast_tx
-        //                 .tx_ping
-        //                 .send(PingResp)
-        //                 .context("send ping resp fail")?;
-        //             Ok(())
-        //         }
-        //         PacketType::Disconnect => {
-        //             warn!("should not receive disconnect");
-        //             Ok(())
-        //         }
-        //         _ => Err(Error::PayloadRequired)?,
-        //     };
-        // }
-        //
-        // let packet = packet.freeze();
-        // match packet_type {
-        //     // PacketType::Connect => Packet::Connect(Connect::read(fixed_header, packet)?),
-        //     PacketType::ConnAck => {
-        //         let _ = ConnAck::read(fixed_header, packet)?;
-        //         todo!();
-        //         self.tx.send(NetworkEvent::Connected).await?;
-        //     }
-        //     PacketType::Publish => {
-        //         self.tx_publish(Publish::read(fixed_header, packet)?).await;
-        //     }
-        //     PacketType::PubAck => {
-        //         self.tx_publish_ack(PubAck::read(fixed_header, packet)?)
-        //             .await;
-        //     }
-        //     PacketType::PubRec => {
-        //         self.tx_publish_rec(PubRec::read(fixed_header, packet)?)
-        //             .await;
-        //     }
-        //     PacketType::PubRel => {
-        //         self.tx_publish_rel(PubRel::read(fixed_header, packet)?)
-        //             .await;
-        //     }
-        //     PacketType::PubComp => {
-        //         self.tx_publish_comp(PubComp::read(fixed_header, packet)?)
-        //             .await;
-        //     }
-        //     // PacketType::Subscribe => Packet::Subscribe(Subscribe::read(fixed_header, packet)?),
-        //     PacketType::SubAck => {
-        //         self.tx_sub_ack(SubAck::read(fixed_header, packet)?.into())
-        //             .await;
-        //     }
-        //     // PacketType::Unsubscribe => Packet::Unsubscribe(Unsubscribe::read(fixed_header, packet)?),
-        //     PacketType::UnsubAck => {
-        //         self.tx_unsub_ack(UnsubAck::read(fixed_header, packet)?.into())
-        //             .await;
-        //     }
-        //     // PacketType::PingReq => Packet::PingReq,
-        //     PacketType::PingResp => {
-        //         warn!("PingResp should be zero byte");
-        //         self.senders.broadcast_tx.tx_ping.send(PingResp)?;
-        //     }
-        //     // PacketType::Disconnect => Packet::Disconnect,
-        //     ty => {
-        //         warn!("should not receive {:?}", ty);
-        //     }
-        // };
-        // Ok(())
     }
 
     async fn tx_publish_rel(&self, msg: PubRel) {
