@@ -1,3 +1,4 @@
+use crate::datas::id::Id;
 use crate::datas::payload::Payload;
 use crate::tasks::task_client::data::{TracePublish, TraceSubscribe, TraceUnubscribe};
 use crate::tasks::task_network::NetworkEvent;
@@ -5,6 +6,7 @@ use crate::v3_1_1::Publish;
 use crate::{ClientCommand, QoS};
 use bytes::Bytes;
 use std::default::Default;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
 #[derive(Debug)]
@@ -46,21 +48,21 @@ impl Reason {
     }
 }
 
+/// 仅限
+static KEEP_ALIVE_ID: AtomicU32 = AtomicU32::new(0);
+
+impl Default for KeepAliveTime {
+    fn default() -> Self {
+        KEEP_ALIVE_ID.fetch_add(1, Ordering::Relaxed);
+        Self(KEEP_ALIVE_ID.load(Ordering::Relaxed))
+    }
+}
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct KeepAliveTime(u64);
+pub struct KeepAliveTime(u32);
 
 impl KeepAliveTime {
-    pub fn init() -> Self {
-        Self(0)
-    }
-    pub fn update(&mut self) -> Self {
-        if let Some(time) = self.0.checked_add(1) {
-            self.0 = time;
-        } else {
-            self.0 = 0;
-        }
-        let old = self.clone();
-        old
+    pub fn latest(&self) -> bool {
+        self.0 == KEEP_ALIVE_ID.load(Ordering::Relaxed)
     }
 }
 

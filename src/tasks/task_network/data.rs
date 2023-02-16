@@ -53,6 +53,16 @@ pub enum NetworkEvent {
     Disconnect(String),
 }
 
+impl NetworkEvent {
+    pub fn is_connected(&self) -> bool {
+        if let Self::Connected = self {
+            true
+        } else {
+            false
+        }
+    }
+}
+
 pub enum Data {
     NetworkData(DataWaitingToBeSend),
     // Reconnect,

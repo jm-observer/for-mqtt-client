@@ -62,19 +62,16 @@ impl TaskHub {
         for i in 1..=u16::MAX {
             a.push(i).unwrap();
         }
-        let mut keep_alive = KeepAliveTime::init();
-        let (senders, mut rx_hub_msg, mut rx_hub_network_event) =
-            self.run_to_connect(&mut keep_alive).await?;
+        let (senders, mut rx_hub_msg, mut rx_hub_network_event) = self.run_to_connect().await?;
         loop {
             match self.state {
                 HubState::ToConnect => {
-                    self.run_to_connect(&mut keep_alive).await?;
+                    self.run_to_connect().await?;
                 }
                 HubState::Connected => {
                     self.run_connected(
                         &mut a,
                         &mut b,
-                        &mut keep_alive,
                         &mut rx_hub_msg,
                         &mut rx_hub_network_event,
                         &senders,
@@ -95,7 +92,6 @@ impl TaskHub {
         &mut self,
         a: &mut Producer<u16, Arc<SharedRb>>,
         b: &mut Consumer<u16, Arc<SharedRb>>,
-        keep_alive_time: &mut KeepAliveTime,
         rx_hub_msg: &mut mpsc::Receiver<HubMsg>,
         rx_network_event: &mut mpsc::Receiver<NetworkEvent>,
         senders: &Senders,
@@ -106,7 +102,7 @@ impl TaskHub {
             }
             select! {
                 hub_msg = rx_hub_msg.recv() => match hub_msg {
-                    Some(msg) => self.deal_hub_msg(msg, a, b, keep_alive_time, &senders).await?,
+                    Some(msg) => self.deal_hub_msg(msg, a, b, &senders).await?,
                     None => todo!()
                 },
                 client_command = self.rx_from_client.recv() => {
@@ -114,7 +110,7 @@ impl TaskHub {
                 },
                 network_status = rx_network_event.recv() => match network_status {
                     Some(network_status) => {
-                        self.update_state_by_network_status(network_status.into());
+                        self.update_state_by_network_status(network_status.into())?;
                     },
                     None => todo!()
                 }
@@ -143,13 +139,11 @@ impl TaskHub {
     ///
     async fn run_to_connect(
         &mut self,
-        keep_alive_time: &mut KeepAliveTime,
     ) -> Result<(
         Senders,
         mpsc::Receiver<HubMsg>,
         mpsc::Receiver<NetworkEvent>,
     )> {
-        // init network task
         let (senders, rx_hub_msg, mut rx_hub_network_event, rx_network_data) =
             Senders::init(1024, self.tx_to_user.clone());
         let (addr, port) = self.options.broker_address();
@@ -165,9 +159,13 @@ impl TaskHub {
         loop {
             if self.state.is_to_connect() {
                 match rx_hub_network_event.recv().await {
-                    Some(status) => {
-                        self.update_state_by_network_status(status.into())?;
-                    }
+                    Some(status) => match status {
+                        NetworkEvent::Connected => {
+                            self.state = HubState::Connected;
+                        }
+                        NetworkEvent::Disconnected => {}
+                        NetworkEvent::Disconnect(_) => {}
+                    },
                     None => {
                         error!("");
                     }
@@ -188,18 +186,17 @@ impl TaskHub {
         req: HubMsg,
         a: &mut Producer<u16, Arc<SharedRb>>,
         b: &mut Consumer<u16, Arc<SharedRb>>,
-        keep_alive_time: &mut KeepAliveTime,
         senders: &Senders,
     ) -> Result<()> {
         match req {
             HubMsg::RecoverId(id) => {
                 debug!("recover id: {}", id);
                 a.push(id).unwrap();
-                self.init_keep_alive_check(keep_alive_time, senders);
+                self.init_keep_alive_check(senders);
             }
             HubMsg::PingSuccess => {
                 self.update_state_by_ping(true);
-                self.init_keep_alive_check(keep_alive_time, senders);
+                self.init_keep_alive_check(senders);
             }
             HubMsg::PingFail => {
                 // 需要再看看文档，看如何处理
@@ -210,7 +207,7 @@ impl TaskHub {
                 // }
             }
             HubMsg::KeepAlive(keep_alive) => {
-                if *keep_alive_time == keep_alive {
+                if keep_alive.latest() {
                     debug!("send ping req");
                     TaskPing::init(senders.clone());
                 }
@@ -327,11 +324,10 @@ impl TaskHub {
         }
     }
     /// 初始化一个keep alive的计时
-    fn init_keep_alive_check(&self, keep_alive_time: &mut KeepAliveTime, senders: &Senders) {
+    fn init_keep_alive_check(&self, senders: &Senders) {
         debug!("init_keep_alive_check");
-        let keep_alive = keep_alive_time.update();
         init_keep_alive_check(
-            keep_alive,
+            KeepAliveTime::default(),
             self.options.keep_alive(),
             senders.tx_hub_msg.clone(),
         );
