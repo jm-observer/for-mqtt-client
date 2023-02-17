@@ -8,6 +8,7 @@ use std::sync::Arc;
 #[derive(Debug, Clone)]
 pub struct TracePublish {
     id: u32,
+    packet_id: u16,
     pub topic: Arc<String>,
     pub qos: QoS,
     pub payload: Arc<Bytes>,
@@ -18,6 +19,7 @@ impl TracePublish {
     pub fn new(topic: Arc<String>, qos: QoS, payload: Arc<Bytes>, retain: bool) -> Self {
         Self {
             id: Id::id(),
+            packet_id: 0,
             topic,
             qos,
             payload,
@@ -26,6 +28,13 @@ impl TracePublish {
     }
     pub fn id(&self) -> u32 {
         self.id
+    }
+
+    pub(crate) fn set_packet_id(&mut self, packet_id: u16) {
+        self.packet_id = packet_id;
+    }
+    pub(crate) fn packet_id(&self) -> u16 {
+        self.packet_id
     }
 }
 

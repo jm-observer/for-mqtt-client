@@ -100,8 +100,8 @@ impl From<NetworkEvent> for State {
 pub enum HubState {
     ToConnect,
     Connected,
-    ToStop,
-    Stoped,
+    ToDisconnect(ToDisconnectReason),
+    Disconnected,
 }
 
 impl HubState {
@@ -117,44 +117,16 @@ impl HubState {
             _ => false,
         }
     }
-    pub fn is_to_stop(&self) -> bool {
+    pub fn is_to_disconnect(&self) -> bool {
         match self {
-            HubState::ToStop => true,
+            HubState::ToDisconnect(_) => true,
             _ => false,
         }
     }
-    pub fn is_stoped(&self) -> bool {
+    pub fn is_disconnected(&self) -> bool {
         match self {
-            HubState::Stoped => true,
+            HubState::Disconnected => true,
             _ => false,
-        }
-    }
-    pub fn update_by_network_status(&self, status: &NetworkEvent) -> Self {
-        match status {
-            NetworkEvent::Connected => match self {
-                HubState::ToConnect | HubState::Connected => Self::Connected,
-                HubState::ToStop | HubState::Stoped => Self::ToStop,
-            },
-            NetworkEvent::Disconnect(_) => match self {
-                HubState::ToConnect | HubState::Connected => Self::ToConnect,
-                HubState::ToStop | HubState::Stoped => Self::Stoped,
-            },
-            _ => {
-                todo!()
-            }
-        }
-    }
-    pub fn update_by_ping(&self, is_success: bool) -> Self {
-        if is_success {
-            match self {
-                HubState::ToConnect | HubState::Connected => Self::Connected,
-                HubState::ToStop | HubState::Stoped => Self::ToStop,
-            }
-        } else {
-            match self {
-                HubState::ToConnect | HubState::Connected => Self::ToConnect,
-                HubState::ToStop | HubState::Stoped => Self::Stoped,
-            }
         }
     }
 }
@@ -163,4 +135,10 @@ impl Default for HubState {
     fn default() -> Self {
         Self::ToConnect
     }
+}
+
+pub enum ToDisconnectReason {
+    NetworkError(String),
+    PingFail,
+    ClientCommand,
 }
