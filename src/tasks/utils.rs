@@ -53,7 +53,7 @@ pub async fn timeout_rx<T: PacketRel>(
 async fn _timeout_rx<T: PacketRel>(rx_ack: &mut Receiver<T>, pkid: u16) -> anyhow::Result<T> {
     while let Ok(msg) = rx_ack.recv().await {
         if msg.is_rel(pkid) {
-            debug!("{:?} rx success", msg);
+            debug!("rx success: {:?}", msg);
             return Ok(msg);
         }
     }

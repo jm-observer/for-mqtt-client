@@ -13,27 +13,28 @@ use tokio::spawn;
 pub struct TaskUnsubscribe {
     tx: Senders,
     trace_unsubscribe: TraceUnubscribe,
-    packet_id: u16,
 }
 
 impl TaskUnsubscribe {
-    pub fn init(tx: Senders, trace_unsubscribe: TraceUnubscribe, packet_id: u16) {
+    pub fn init(tx: Senders, trace_unsubscribe: TraceUnubscribe) {
         spawn(async move {
             let mut unsubscribe = Self {
                 tx,
                 trace_unsubscribe,
-                packet_id,
             };
             unsubscribe.run().await.unwrap();
         });
     }
     async fn run(&mut self) -> anyhow::Result<()> {
         debug!("start to unsubscribe");
-        let mut packet = Unsubscribe::new(self.trace_unsubscribe.topics.clone(), self.packet_id);
+        let mut packet = Unsubscribe::new(
+            self.trace_unsubscribe.topics.clone(),
+            self.trace_unsubscribe.packet_id,
+        );
         let mut rx_ack = self.tx.broadcast_tx.tx_unsub_ack.subscribe();
         complete_to_tx_packet(
             &mut rx_ack,
-            self.packet_id,
+            self.trace_unsubscribe.packet_id,
             TIMEOUT_TO_COMPLETE_TX,
             &self.tx,
             &mut packet,
@@ -41,7 +42,7 @@ impl TaskUnsubscribe {
         .await?;
         self.tx
             .tx_hub_msg
-            .send(HubMsg::RecoverId(self.packet_id))
+            .send(HubMsg::RecoverId(self.trace_unsubscribe.packet_id))
             .await
             .unwrap();
         self.tx

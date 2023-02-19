@@ -14,32 +14,23 @@ use tokio::spawn;
 pub struct TaskSubscribe {
     tx: Senders,
     trace_packet: TraceSubscribe,
-    packet_id: u16,
 }
 
 impl TaskSubscribe {
-    pub fn init(tx: Senders, trace_packet: TraceSubscribe, packet_id: u16) {
+    pub fn init(tx: Senders, trace_packet: TraceSubscribe) {
         spawn(async move {
-            let mut subscriber = Self {
-                tx,
-                trace_packet,
-                packet_id,
-            };
+            let mut subscriber = Self { tx, trace_packet };
             subscriber.run().await.unwrap();
         });
     }
     async fn run(self) -> anyhow::Result<()> {
-        let TaskSubscribe {
-            tx,
-            trace_packet,
-            packet_id,
-        } = self;
+        let TaskSubscribe { tx, trace_packet } = self;
         debug!("start to subscribe");
-        let mut packet = Subscribe::new(trace_packet.filters.clone(), packet_id);
+        let mut packet = Subscribe::new(trace_packet.filters.clone(), trace_packet.packet_id);
         let mut rx_ack = tx.broadcast_tx.tx_sub_ack.subscribe();
         let ack = complete_to_tx_packet(
             &mut rx_ack,
-            packet_id,
+            trace_packet.packet_id,
             TIMEOUT_TO_COMPLETE_TX,
             &tx,
             &mut packet,
@@ -47,11 +38,11 @@ impl TaskSubscribe {
         .await?;
         let SubAck { return_codes, .. } = ack;
         tx.tx_hub_msg
-            .send(HubMsg::RecoverId(packet_id))
+            .send(HubMsg::RecoverId(trace_packet.packet_id))
             .await
             .unwrap();
 
-        let TraceSubscribe { id, filters } = trace_packet;
+        let TraceSubscribe { id, filters, .. } = trace_packet;
         if return_codes.len() != filters.len() {
             bail!("todo");
         }

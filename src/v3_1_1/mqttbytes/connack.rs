@@ -6,17 +6,17 @@ use bytes::{Buf, BufMut, Bytes, BytesMut};
 #[repr(u8)]
 pub enum ConnectReturnCode {
     Success = 0,
-    RefusedProtocolVersion,
+    Fail(ConnectReturnFailCode),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum ConnectReturnFailCode {
+    RefusedProtocolVersion = 1,
     BadClientId,
     ServiceUnavailable,
     BadUserNamePassword,
     NotAuthorized,
-}
-
-impl ConnectReturnCode {
-    pub fn is_success(&self) -> bool {
-        *self as u8 == 0
-    }
 }
 
 /// Acknowledgement to connect packet
@@ -55,28 +55,36 @@ impl ConnAck {
 
         Ok(connack)
     }
-
-    pub fn write(&self, buffer: &mut BytesMut) -> usize {
-        let len = self.len();
-        buffer.put_u8(0x20);
-
-        let count = write_remaining_length(buffer, len);
-        buffer.put_u8(self.session_present as u8);
-        buffer.put_u8(self.code as u8);
-
-        1 + count + len
-    }
+    //
+    // pub fn write(&self, buffer: &mut BytesMut) -> usize {
+    //     let len = self.len();
+    //     buffer.put_u8(0x20);
+    //
+    //     let count = write_remaining_length(buffer, len);
+    //     buffer.put_u8(self.session_present as u8);
+    //     buffer.put_u8(self.code as u8);
+    //
+    //     1 + count + len
+    // }
 }
 
 /// Connection return code type
 fn connect_return(num: u8) -> Result<ConnectReturnCode, PacketParseError> {
     match num {
         0 => Ok(ConnectReturnCode::Success),
-        1 => Ok(ConnectReturnCode::RefusedProtocolVersion),
-        2 => Ok(ConnectReturnCode::BadClientId),
-        3 => Ok(ConnectReturnCode::ServiceUnavailable),
-        4 => Ok(ConnectReturnCode::BadUserNamePassword),
-        5 => Ok(ConnectReturnCode::NotAuthorized),
+        1 => Ok(ConnectReturnCode::Fail(
+            ConnectReturnFailCode::RefusedProtocolVersion,
+        )),
+        2 => Ok(ConnectReturnCode::Fail(ConnectReturnFailCode::BadClientId)),
+        3 => Ok(ConnectReturnCode::Fail(
+            ConnectReturnFailCode::ServiceUnavailable,
+        )),
+        4 => Ok(ConnectReturnCode::Fail(
+            ConnectReturnFailCode::BadUserNamePassword,
+        )),
+        5 => Ok(ConnectReturnCode::Fail(
+            ConnectReturnFailCode::NotAuthorized,
+        )),
         num => Err(PacketParseError::InvalidConnectReturnCode(num)),
     }
 }

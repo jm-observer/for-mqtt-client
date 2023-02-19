@@ -1,27 +1,25 @@
 use crate::tasks::Receipter;
-use crate::v3_1_1::{ConnectReturnCode, FixedHeaderError, PacketParseError, PacketType};
+use crate::v3_1_1::{
+    ConnectReturnCode, ConnectReturnFailCode, FixedHeaderError, PacketParseError, PacketType,
+};
 use bytes::Bytes;
 use std::fmt::{Debug, Formatter};
 use std::ops::Deref;
 use std::sync::Arc;
 use tokio::io;
-use tokio::sync::broadcast;
+use tokio::net::TcpStream;
+use tokio::sync::{broadcast, mpsc};
 
+#[derive(Debug)]
 pub enum NetworkState {
     ToConnect,
     Connected,
+    // 用error来替代后续的状态
     ToDisconnect,
     Disconnected,
 }
 
 impl NetworkState {
-    pub fn is_disconnected(&self) -> bool {
-        if let Self::Disconnected = self {
-            true
-        } else {
-            false
-        }
-    }
     pub fn is_to_disconnected(&self) -> bool {
         if let Self::ToDisconnect = self {
             true
@@ -48,14 +46,16 @@ impl NetworkState {
 #[derive(Debug, Clone)]
 /// broadcast network event
 pub enum NetworkEvent {
-    Connected,
-    Disconnected,
-    Disconnect(String),
+    /// bool: session_present
+    Connected(bool),
+    ConnectFail(ToConnectError),
+    /// 中间突然断开，network task发送后即drop
+    ConnectedErr(String),
 }
 
 impl NetworkEvent {
     pub fn is_connected(&self) -> bool {
-        if let Self::Connected = self {
+        if let Self::Connected(_) = self {
             true
         } else {
             false
@@ -63,33 +63,9 @@ impl NetworkEvent {
     }
 }
 
-pub enum Data {
-    NetworkData(DataWaitingToBeSend),
-    // Reconnect,
+#[derive(Debug)]
+pub enum HubNetworkCommand {
     Disconnect,
-}
-
-impl Data {
-    pub fn is_network_data(&self) -> bool {
-        if let Self::NetworkData(_) = self {
-            true
-        } else {
-            false
-        }
-    }
-}
-
-impl Debug for Data {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Data::NetworkData(_) => {
-                write!(f, "NetworkData")
-            }
-            Data::Disconnect => {
-                write!(f, "Disconnect")
-            }
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -109,12 +85,6 @@ impl DataWaitingToBeSend {
     }
 }
 
-impl From<DataWaitingToBeSend> for Data {
-    fn from(val: DataWaitingToBeSend) -> Self {
-        Self::NetworkData(val)
-    }
-}
-
 impl Deref for DataWaitingToBeSend {
     type Target = Arc<Bytes>;
 
@@ -125,16 +95,24 @@ impl Deref for DataWaitingToBeSend {
 
 /// Error during serialization and deserialization
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum Error {
+pub enum NetworkTasksError {
     #[error("Network error")]
     NetworkError(String),
-    #[error("parse packet error")]
-    PacketError(#[from] PacketParseError),
-    #[error("recv data fail")]
-    RecvDataFail,
     #[error("channel abnormal")]
     ChannelAbnormal,
+    #[error("Command disconnect")]
+    HubCommandToDisconnect,
+    #[error("Connect fail: {0}")]
+    ConnectFail(ToConnectError),
 }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChannelAbnormal;
+
+// #[derive(Debug, Clone, PartialEq, Eq)]
+// pub enum ToConnectResult {
+//     Success(TcpStream),
+//     DisconnectByHub,
+// }
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ToConnectError {
     #[error("Expected ConnAck, received: {0:?}")]
@@ -146,20 +124,48 @@ pub enum ToConnectError {
     #[error("parse packet error")]
     PacketError(#[from] PacketParseError),
     #[error("broker refuse to connect")]
-    BrokerRefuse(ConnectReturnCode),
+    BrokerRefuse(ConnectReturnFailCode),
+    #[error("channel abnormal")]
+    ChannelAbnormal,
 }
 impl From<io::Error> for ToConnectError {
     fn from(err: io::Error) -> Self {
         Self::NetworkError(err.to_string())
     }
 }
-impl<T> From<broadcast::error::SendError<T>> for Error {
+impl<T> From<broadcast::error::SendError<T>> for NetworkTasksError {
     fn from(_: broadcast::error::SendError<T>) -> Self {
         Self::ChannelAbnormal
     }
 }
-impl From<io::Error> for Error {
+impl<T> From<mpsc::error::SendError<T>> for NetworkTasksError {
+    fn from(_: mpsc::error::SendError<T>) -> Self {
+        Self::ChannelAbnormal
+    }
+}
+impl From<io::Error> for NetworkTasksError {
     fn from(err: io::Error) -> Self {
         Self::NetworkError(err.to_string())
+    }
+}
+impl From<ToConnectError> for NetworkTasksError {
+    fn from(err: ToConnectError) -> Self {
+        Self::ConnectFail(err)
+    }
+}
+
+impl From<ChannelAbnormal> for NetworkTasksError {
+    fn from(err: ChannelAbnormal) -> Self {
+        Self::ChannelAbnormal
+    }
+}
+impl From<ChannelAbnormal> for ToConnectError {
+    fn from(err: ChannelAbnormal) -> Self {
+        Self::ChannelAbnormal
+    }
+}
+impl<T> From<mpsc::error::SendError<T>> for ToConnectError {
+    fn from(_: mpsc::error::SendError<T>) -> Self {
+        Self::ChannelAbnormal
     }
 }

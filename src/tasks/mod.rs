@@ -14,7 +14,7 @@ pub use task_subscribe::TaskSubscribe;
 
 use crate::datas::id::Id;
 use crate::tasks::task_hub::HubMsg;
-use crate::tasks::task_network::{Data, DataWaitingToBeSend, NetworkEvent};
+use crate::tasks::task_network::{DataWaitingToBeSend, HubNetworkCommand, NetworkEvent};
 use crate::tasks::task_publish::PublishMsg;
 use crate::tasks::task_subscribe::SubscribeMsg;
 use crate::v3_1_1::{
@@ -70,7 +70,8 @@ impl BroadcastTx {
 pub struct Senders {
     tx_hub_msg: mpsc::Sender<HubMsg>,
     tx_hub_network_event: mpsc::Sender<NetworkEvent>,
-    tx_network_data: mpsc::Sender<Data>,
+    tx_network_data: mpsc::Sender<DataWaitingToBeSend>,
+    tx_hub_network_command: mpsc::Sender<HubNetworkCommand>,
     tx_to_user: Sender<MqttEvent>,
     broadcast_tx: BroadcastTx,
 }
@@ -83,11 +84,13 @@ impl Senders {
         Senders,
         mpsc::Receiver<HubMsg>,
         mpsc::Receiver<NetworkEvent>,
-        mpsc::Receiver<Data>,
+        mpsc::Receiver<DataWaitingToBeSend>,
+        mpsc::Receiver<HubNetworkCommand>,
     ) {
         let (tx_hub_msg, rx_hub_msg) = mpsc::channel(buffer);
         let (tx_hub_network_event, rx_hub_network_event) = mpsc::channel(buffer);
         let (tx_network_data, rx_network_data) = mpsc::channel(buffer);
+        let (tx_hub_network_command, rx_hub_network_command) = mpsc::channel(buffer);
         (
             Self {
                 tx_hub_msg,
@@ -95,10 +98,12 @@ impl Senders {
                 tx_network_data,
                 tx_to_user,
                 broadcast_tx: BroadcastTx::init(1024),
+                tx_hub_network_command,
             },
             rx_hub_msg,
             rx_hub_network_event,
             rx_network_data,
+            rx_hub_network_command,
         )
     }
     pub fn tx_to_user<T: Into<MqttEvent>>(&self, msg: T) {

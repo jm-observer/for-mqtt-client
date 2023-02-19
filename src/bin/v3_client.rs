@@ -13,9 +13,9 @@ use tokio::time::sleep;
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 10)]
 async fn main() -> Result<()> {
-    custom_utils::logger::custom_build(Info)
-        .module("for_mqtt_client::tasks::task_network", Debug)
-        .module("for_mqtt_client::tasks::task_publish", Debug)
+    custom_utils::logger::custom_build(Debug)
+        // .module("for_mqtt_client::tasks::task_network", Debug)
+        // .module("for_mqtt_client::tasks::task_publish", Debug)
         .build_default()
         .log_to_stdout()
         .start();
@@ -26,14 +26,14 @@ async fn main() -> Result<()> {
     spawn(async move {
         while let Ok(event) = event_rx.recv().await {
             match event {
-                MqttEvent::ConnectSuccess => {
-                    info!("\nConnectSuccess \n");
+                MqttEvent::ConnectSuccess(session_present) => {
+                    info!("\nConnectSuccess {}\n", session_present);
                 }
                 MqttEvent::ConnectFail(reason) => {
                     info!("\nConnectFail：{} \n", reason);
                 }
                 MqttEvent::Publish(packet) => {
-                    info!("\nRx Publish：{:?} \n", packet);
+                    info!("\nRx Publish：{:x?} \n", packet.payload.as_ref());
                 }
                 MqttEvent::PublishSuccess(id) => {
                     info!("\nPublish Success：{} \n", id);
@@ -42,6 +42,9 @@ async fn main() -> Result<()> {
                     info!("\nSubscribeAck：{:?} \n", ack);
                 }
                 MqttEvent::UnsubscribeAck(ack) => info!("\nUnsubscribeAck：{:?} \n", ack),
+                event => {
+                    info!("\nMqttEvent：{:?} \n", event);
+                }
             }
         }
         warn!("**************");

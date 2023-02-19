@@ -53,7 +53,7 @@ pub struct MqttOptions {
     manual_acks: bool,
 
     /// 是否自动重连
-    auto_reconnect: bool,
+    pub(crate) auto_reconnect: bool,
 }
 
 impl MqttOptions {

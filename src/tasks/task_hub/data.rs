@@ -2,12 +2,13 @@ use crate::datas::id::Id;
 use crate::datas::payload::Payload;
 use crate::tasks::task_client::data::{TracePublish, TraceSubscribe, TraceUnubscribe};
 use crate::tasks::task_network::NetworkEvent;
-use crate::v3_1_1::Publish;
+use crate::v3_1_1::{ConnectReturnFailCode, Publish};
 use crate::{ClientCommand, QoS};
 use bytes::Bytes;
 use std::default::Default;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
+use tokio::sync::{broadcast, mpsc};
 
 #[derive(Debug)]
 pub enum HubMsg {
@@ -34,6 +35,7 @@ pub enum Reason {
     Init,
     NetworkErr(String),
     PingFail,
+    BrokerRefuse(ConnectReturnFailCode),
 }
 
 impl Reason {
@@ -44,6 +46,10 @@ impl Reason {
                 format!("NetworkErr: {}", msg)
             }
             Reason::PingFail => "PingFail".to_string(),
+
+            Reason::BrokerRefuse(code) => {
+                format!("BrokerRefuse: {:?}", code)
+            }
         }
     }
 }
@@ -85,18 +91,7 @@ impl Default for Reason {
     }
 }
 
-impl From<NetworkEvent> for State {
-    fn from(status: NetworkEvent) -> Self {
-        match status {
-            NetworkEvent::Connected => Self::Connected,
-            NetworkEvent::Disconnect(error) => Self::UnConnected(Reason::NetworkErr(error)),
-            NetworkEvent::Disconnected => {
-                todo!()
-            }
-        }
-    }
-}
-
+#[derive(Debug)]
 pub enum HubState {
     ToConnect,
     Connected,
@@ -136,9 +131,60 @@ impl Default for HubState {
         Self::ToConnect
     }
 }
-
+#[derive(Debug)]
 pub enum ToDisconnectReason {
     NetworkError(String),
     PingFail,
     ClientCommand,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum HubError {
+    // #[error("Network error")]
+    // NetworkError(String),
+    #[error("channel abnormal")]
+    ChannelAbnormal,
+    #[error("StateErr {0}")]
+    StateErr(String),
+    #[error("PacketIdErr {0}")]
+    PacketIdErr(String),
+    #[error("ViolenceDisconnectAndDrop")]
+    ViolenceDisconnectAndDrop,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum HubToConnectError {
+    #[error("channel abnormal")]
+    ChannelAbnormal,
+    #[error("ViolenceDisconnectAndDrop")]
+    ViolenceDisconnectAndDrop,
+}
+
+impl From<HubToConnectError> for HubError {
+    fn from(value: HubToConnectError) -> Self {
+        match value {
+            HubToConnectError::ChannelAbnormal => HubError::ChannelAbnormal,
+            HubToConnectError::ViolenceDisconnectAndDrop => HubError::ViolenceDisconnectAndDrop,
+        }
+    }
+}
+impl<T> From<broadcast::error::SendError<T>> for HubError {
+    fn from(_: broadcast::error::SendError<T>) -> Self {
+        Self::ChannelAbnormal
+    }
+}
+impl<T> From<mpsc::error::SendError<T>> for HubError {
+    fn from(_: mpsc::error::SendError<T>) -> Self {
+        Self::ChannelAbnormal
+    }
+}
+impl<T> From<broadcast::error::SendError<T>> for HubToConnectError {
+    fn from(_: broadcast::error::SendError<T>) -> Self {
+        Self::ChannelAbnormal
+    }
+}
+impl<T> From<mpsc::error::SendError<T>> for HubToConnectError {
+    fn from(_: mpsc::error::SendError<T>) -> Self {
+        Self::ChannelAbnormal
+    }
 }
