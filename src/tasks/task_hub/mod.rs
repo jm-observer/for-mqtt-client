@@ -418,8 +418,6 @@ fn init_keep_alive_check(time: KeepAliveTime, keep_alive: u16, tx: mpsc::Sender<
     spawn(async move {
         sleep(Duration::from_secs(keep_alive as u64)).await;
         debug!("keep_alive_check wake {:?}", time);
-        if tx.send(HubMsg::KeepAlive(time)).await.is_err() {
-            error!("fail to send keep alive check");
-        }
+        let _ = tx.send(HubMsg::KeepAlive(time)).await;
     });
 }
