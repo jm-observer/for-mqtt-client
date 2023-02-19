@@ -46,8 +46,8 @@ impl TaskPing {
             let result = timeout(Duration::from_secs(3), rx_ack.recv()).await;
             if let Ok(Ok(_)) = result {
                 debug!("ping resp recv success");
-                if let Err(e) = self.tx.tx_hub_msg.send(HubMsg::PingSuccess).await {
-                    error!("");
+                if let Err(_) = self.tx.tx_hub_msg.send(HubMsg::PingSuccess).await {
+                    error!("todo");
                 }
                 return;
             } else {

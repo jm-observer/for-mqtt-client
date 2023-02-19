@@ -287,7 +287,7 @@ mod test {
     use pretty_assertions::assert_eq;
 
     #[test]
-    fn connect_parsing_works() {
+    fn connect_parsing_works() -> anyhow::Result<()> {
         let mut stream = bytes::BytesMut::new();
         let packetstream = &[
             0x10,
@@ -338,9 +338,9 @@ mod test {
         ];
 
         stream.extend_from_slice(&packetstream[..]);
-        let fixed_header = parse_fixed_header(stream.iter()).unwrap();
+        let fixed_header = parse_fixed_header(stream.iter())?;
         let connect_bytes = stream.split_to(fixed_header.frame_length()).freeze();
-        let packet = Connect::read(fixed_header, connect_bytes).unwrap();
+        let packet = Connect::read(fixed_header, connect_bytes)?;
 
         assert_eq!(
             packet,
@@ -353,6 +353,7 @@ mod test {
                 login: Some(Login::new("rumq", "mq")),
             }
         );
+        Ok(())
     }
 
     fn sample_bytes() -> Vec<u8> {
@@ -413,7 +414,7 @@ mod test {
         };
 
         let mut buf = BytesMut::new();
-        connect.write(&mut buf).unwrap();
+        connect.write(&mut buf)?;
 
         // println!("{:?}", &buf[..]);
         // println!("{:?}", sample_bytes());

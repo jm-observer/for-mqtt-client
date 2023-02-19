@@ -1,11 +1,8 @@
 use crate::tasks::task_hub::HubMsg;
+use crate::tasks::utils::CommonErr;
 use crate::tasks::Senders;
-use crate::v3_1_1::{PubAck, Publish};
-use crate::QoS;
+use crate::v3_1_1::PubAck;
 use anyhow::Result;
-use bytes::{Bytes, BytesMut};
-use log::debug;
-use std::sync::Arc;
 use tokio::spawn;
 
 /// consider the order in which pushlish   are repeated
@@ -18,10 +15,14 @@ impl TaskPublishRxQos1 {
     pub fn init(tx: Senders, packet_id: u16) {
         spawn(async move {
             let mut publish = Self { tx, packet_id };
-            publish.run().await.unwrap();
+            if let Err(e) = publish.run().await {
+                match e {
+                    CommonErr::ChannelAbnormal => {}
+                }
+            }
         });
     }
-    async fn run(&mut self) -> Result<()> {
+    async fn run(&mut self) -> Result<(), CommonErr> {
         let data = PubAck::data(self.packet_id);
         self.tx.tx_network_default(data).await?;
         self.tx

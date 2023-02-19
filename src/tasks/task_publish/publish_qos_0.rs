@@ -1,11 +1,10 @@
-use crate::datas::payload::Payload;
 use crate::tasks::task_client::data::TracePublish;
+use crate::tasks::utils::CommonErr;
 use crate::tasks::Senders;
 use crate::v3_1_1::Publish;
-use crate::{QoS, QoSWithPacketId};
-use bytes::{Bytes, BytesMut};
+use crate::QoSWithPacketId;
+use bytes::BytesMut;
 use log::debug;
-use std::sync::Arc;
 use tokio::spawn;
 
 /// consider the order in which pushlish   are repeated
@@ -18,10 +17,14 @@ impl TaskPublishQos0 {
     pub async fn init(tx: Senders, trace_publish: TracePublish) {
         spawn(async move {
             let mut publish = Self { tx, trace_publish };
-            publish.run().await.unwrap();
+            if let Err(e) = publish.run().await {
+                match e {
+                    CommonErr::ChannelAbnormal => {}
+                }
+            }
         });
     }
-    async fn run(&mut self) -> anyhow::Result<()> {
+    async fn run(&mut self) -> anyhow::Result<(), CommonErr> {
         debug!("start to Publish");
         let packet = Publish::new(
             self.trace_publish.topic.clone(),

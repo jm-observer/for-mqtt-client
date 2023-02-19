@@ -1,6 +1,3 @@
-use super::*;
-use bytes::{BufMut, BytesMut};
-
 pub struct Disconnect;
 
 pub static DISCONNECT_DATA: [u8; 2] = [0xE0, 0x00];

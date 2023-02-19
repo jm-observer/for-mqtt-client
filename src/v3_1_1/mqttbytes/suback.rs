@@ -91,7 +91,7 @@ mod test {
     use pretty_assertions::assert_eq;
 
     #[test]
-    fn suback_parsing_works() {
+    fn suback_parsing_works() -> anyhow::Result<()> {
         let stream = vec![
             0x90, 4, // packet type, flags and remaining len
             0x00, 0x0F, // variable header. pkid = 15
@@ -100,9 +100,9 @@ mod test {
         ];
 
         let mut stream = BytesMut::from(&stream[..]);
-        let fixed_header = parse_fixed_header(stream.iter()).unwrap();
+        let fixed_header = parse_fixed_header(stream.iter())?;
         let ack_bytes = stream.split_to(fixed_header.frame_length()).freeze();
-        let packet = SubAck::read(fixed_header, ack_bytes).unwrap();
+        let packet = SubAck::read(fixed_header, ack_bytes)?;
 
         assert_eq!(
             packet,
@@ -114,5 +114,6 @@ mod test {
                 ],
             }
         );
+        Ok(())
     }
 }

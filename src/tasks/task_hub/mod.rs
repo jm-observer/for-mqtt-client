@@ -62,7 +62,7 @@ impl TaskHub {
         spawn(async move {
             let (mut a, mut b) = ringbuf::SharedRb::new(65535).split();
             for i in 1..=u16::MAX {
-                a.push(i).unwrap();
+                let _ = a.push(i);
             }
             if let Err(e) = hub.run(&mut a, &mut b).await {
                 error!("{:?}", e);

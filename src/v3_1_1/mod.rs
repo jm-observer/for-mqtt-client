@@ -1,15 +1,12 @@
 use crate::v3_1_1::mqttbytes::LastWill;
-use crate::{QoS, Transport};
-use bytes::Bytes;
+use crate::Transport;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::broadcast::Receiver;
 
 mod mqttbytes;
 
-use crate::tasks::task_client::data::MqttEvent;
 use crate::tasks::task_client::Client;
-use crate::tasks::{Senders, TaskHub};
+use crate::tasks::TaskHub;
 pub use mqttbytes::*;
 
 #[derive(Debug, Clone)]
@@ -93,32 +90,6 @@ impl MqttOptions {
     }
 
     #[cfg(feature = "url")]
-    /// Creates an [`MqttOptions`] object by parsing provided string with the [url] crate's
-    /// [`Url::parse(url)`](url::Url::parse) method and is only enabled when run using the "url" feature.
-    ///
-    /// ```
-    /// # use rumqttc::MqttOptions;
-    /// let options = MqttOptions::parse_url("mqtt://example.com:1883?client_id=123").unwrap();
-    /// ```
-    ///
-    /// **NOTE:** A url must be prefixed with one of either `tcp://`, `mqtt://`, `ssl://`,`mqtts://`,
-    /// `ws://` or `wss://` to denote the protocol for establishing a connection with the broker.
-    ///
-    /// **NOTE:** Encrypted connections(i.e. `mqtts://`, `ssl://`, `wss://`) by default use the
-    /// system's root certificates. To configure with custom certificates, one may use the
-    /// [`set_transport`](MqttOptions::set_transport) method.
-    ///
-    /// ```ignore
-    /// # use rumqttc::{MqttOptions, Transport};
-    /// # use tokio_rustls::rustls::ClientConfig;
-    /// # let root_cert_store = rustls::RootCertStore::empty();
-    /// # let client_config = ClientConfig::builder()
-    /// #    .with_safe_defaults()
-    /// #    .with_root_certificates(root_cert_store)
-    /// #    .with_no_client_auth();
-    /// let mut options = MqttOptions::parse_url("mqtts://example.com?client_id=123").unwrap();
-    /// options.set_transport(Transport::tls_with_config(client_config.into()));
-    /// ```
     pub fn parse_url<S: Into<String>>(url: S) -> Result<MqttOptions, OptionError> {
         use std::convert::TryFrom;
 

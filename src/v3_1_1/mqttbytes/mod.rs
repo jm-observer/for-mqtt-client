@@ -321,7 +321,9 @@ fn parse_fixed_header(mut stream: Iter<u8>) -> Result<FixedHeader, FixedHeaderEr
     if stream_len < 2 {
         return Err(FixedHeaderError::InsufficientBytes(2 - stream_len));
     }
-    let byte1 = stream.next().unwrap();
+    let byte1 = stream
+        .next()
+        .ok_or(FixedHeaderError::InsufficientBytes(2))?;
     let (len_len, len) = length(stream)?;
 
     Ok(FixedHeader::new(*byte1, len_len, len))

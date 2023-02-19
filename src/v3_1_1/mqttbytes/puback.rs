@@ -58,7 +58,7 @@ mod test {
     use pretty_assertions::assert_eq;
 
     #[test]
-    fn puback_encoding_works() {
+    fn puback_encoding_works() -> anyhow::Result<()> {
         let stream = &[
             0b0100_0000,
             0x02, // packet type, flags and remaining len
@@ -70,10 +70,11 @@ mod test {
             0xEF, // extra packets in the stream
         ];
         let mut stream = BytesMut::from(&stream[..]);
-        let fixed_header = parse_fixed_header(stream.iter()).unwrap();
+        let fixed_header = parse_fixed_header(stream.iter())?;
         let ack_bytes = stream.split_to(fixed_header.frame_length()).freeze();
-        let packet = PubAck::read(fixed_header, ack_bytes).unwrap();
+        let packet = PubAck::read(fixed_header, ack_bytes)?;
 
         assert_eq!(packet, PubAck { packet_id: 10 });
+        Ok(())
     }
 }

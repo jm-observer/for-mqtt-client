@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_mut, unused_imports, unused_variables)]
+// #![allow(dead_code, unused_mut, unused_imports, unused_variables)]
 extern crate core;
 
 pub mod datas;

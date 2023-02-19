@@ -12,15 +12,12 @@ use std::sync::Arc;
 pub use task_hub::TaskHub;
 pub use task_subscribe::TaskSubscribe;
 
-use crate::datas::id::Id;
 use crate::tasks::task_hub::HubMsg;
 use crate::tasks::task_network::{DataWaitingToBeSend, HubNetworkCommand, NetworkEvent};
-use crate::tasks::task_publish::PublishMsg;
-use crate::tasks::task_subscribe::SubscribeMsg;
+use crate::tasks::utils::CommonErr;
 use crate::v3_1_1::{
     ConnAck, PingResp, PubAck, PubComp, PubRec, PubRel, Publish, SubAck, UnsubAck,
 };
-use crate::ClientCommand;
 use anyhow::Result;
 use task_client::data::MqttEvent;
 use tokio::sync::broadcast::*;
@@ -117,7 +114,10 @@ impl Senders {
     pub fn subscribe_connect(&self) -> Receiver<ConnAck> {
         self.broadcast_tx.tx_connect.subscribe()
     }
-    pub async fn tx_network_default<T: Into<Arc<Bytes>>>(&self, bytes: T) -> Result<Receipt> {
+    pub async fn tx_network_default<T: Into<Arc<Bytes>>>(
+        &self,
+        bytes: T,
+    ) -> Result<Receipt, CommonErr> {
         let (receipter, rx) = Receipter::default();
         self.tx_network_data
             .send(DataWaitingToBeSend::init(bytes.into(), Some(receipter)).into())

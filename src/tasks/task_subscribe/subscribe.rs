@@ -1,13 +1,9 @@
 use crate::tasks::task_client::data::{SubscribeAck, SubscribeFilterAck, TraceSubscribe};
 use crate::tasks::task_hub::HubMsg;
-use crate::tasks::task_subscribe::SubscribeMsg;
-use crate::tasks::utils::complete_to_tx_packet;
+use crate::tasks::utils::{complete_to_tx_packet, CommonErr};
 use crate::tasks::{Senders, TIMEOUT_TO_COMPLETE_TX};
 use crate::v3_1_1::{SubAck, Subscribe, SubscribeFilter};
-use crate::QoS;
-use anyhow::bail;
-use log::debug;
-use std::sync::Arc;
+use log::{debug, warn};
 use tokio::spawn;
 
 /// consider the order in which pushlish   are repeated
@@ -20,10 +16,14 @@ impl TaskSubscribe {
     pub fn init(tx: Senders, trace_packet: TraceSubscribe) {
         spawn(async move {
             let mut subscriber = Self { tx, trace_packet };
-            subscriber.run().await.unwrap();
+            if let Err(e) = subscriber.run().await {
+                match e {
+                    CommonErr::ChannelAbnormal => {}
+                }
+            }
         });
     }
-    async fn run(self) -> anyhow::Result<()> {
+    async fn run(self) -> anyhow::Result<(), CommonErr> {
         let TaskSubscribe { tx, trace_packet } = self;
         debug!("start to subscribe");
         let mut packet = Subscribe::new(trace_packet.filters.clone(), trace_packet.packet_id);
@@ -39,12 +39,15 @@ impl TaskSubscribe {
         let SubAck { return_codes, .. } = ack;
         tx.tx_hub_msg
             .send(HubMsg::RecoverId(trace_packet.packet_id))
-            .await
-            .unwrap();
+            .await?;
 
         let TraceSubscribe { id, filters, .. } = trace_packet;
         if return_codes.len() != filters.len() {
-            bail!("todo");
+            warn!(
+                "filters.len {} not equal return_codes.len {}",
+                filters.len(),
+                return_codes.len()
+            );
         }
         let filter_ack: Vec<SubscribeFilterAck> = return_codes
             .into_iter()

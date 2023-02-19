@@ -52,7 +52,7 @@ async fn main() -> Result<()> {
     });
 
     sleep(Duration::from_secs(3)).await;
-    _client.disconnect().await;
+    _client.disconnect().await?;
     sleep(Duration::from_secs(5)).await;
     Ok(())
 }

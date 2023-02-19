@@ -149,7 +149,7 @@ mod test {
     use pretty_assertions::assert_eq;
 
     #[test]
-    fn subscribe_parsing_works() {
+    fn subscribe_parsing_works() -> Result<()> {
         let stream = &[
             0b1000_0010,
             20, // packet type, flags and remaining len
@@ -179,9 +179,9 @@ mod test {
             0xEF, // extra packets in the stream
         ];
         let mut stream = BytesMut::from(&stream[..]);
-        let fixed_header = parse_fixed_header(stream.iter()).unwrap();
+        let fixed_header = parse_fixed_header(stream.iter())?;
         let subscribe_bytes = stream.split_to(fixed_header.frame_length()).freeze();
-        let packet = Subscribe::read(fixed_header, subscribe_bytes).unwrap();
+        let packet = Subscribe::read(fixed_header, subscribe_bytes)?;
 
         assert_eq!(
             packet,
@@ -194,10 +194,11 @@ mod test {
                 ],
             }
         );
+        Ok(())
     }
 
     #[test]
-    fn subscribe_encoding_works() {
+    fn subscribe_encoding_works() -> Result<()> {
         let subscribe = Subscribe {
             packet_id: 260,
             filters: vec![
@@ -208,7 +209,7 @@ mod test {
         };
 
         let mut buf = BytesMut::new();
-        subscribe.write(&mut buf).unwrap();
+        subscribe.write(&mut buf)?;
         assert_eq!(
             buf,
             vec![
@@ -236,5 +237,6 @@ mod test {
                 0x02  // qos = 2
             ]
         );
+        Ok(())
     }
 }

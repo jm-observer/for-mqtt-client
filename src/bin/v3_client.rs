@@ -77,8 +77,7 @@ async fn main() -> Result<()> {
                 "abc".as_bytes(),
                 false
             )
-            .await
-            .unwrap()
+            .await?
     );
     info!(
         "{:?}",
@@ -89,8 +88,7 @@ async fn main() -> Result<()> {
                 "abc".as_bytes(),
                 false
             )
-            .await
-            .unwrap()
+            .await?
     );
     info!(
         "{:?}",
@@ -101,18 +99,16 @@ async fn main() -> Result<()> {
                 "abc".as_bytes(),
                 false
             )
-            .await
-            .unwrap()
+            .await?
     );
     sleep(Duration::from_secs(2)).await;
-    _client.unsubscribe("abcfew".to_string()).await;
+    _client.unsubscribe("abcfew".to_string()).await?;
     sleep(Duration::from_secs(2)).await;
     info!(
         "{:?}",
         _client
             .publish("abcfew".to_string(), QoS::ExactlyOnce, "abc", false)
-            .await
-            .unwrap()
+            .await?
     );
     // _client
     //     .publish(

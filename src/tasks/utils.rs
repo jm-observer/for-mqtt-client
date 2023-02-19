@@ -1,28 +1,29 @@
 use crate::tasks::Senders;
 use crate::traits::packet_dup::PacketDup;
 use crate::traits::packet_rel::PacketRel;
-use anyhow::bail;
 use bytes::Bytes;
-use log::{debug, warn};
+use log::debug;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast::Receiver;
-use tokio::time::error::Elapsed;
+use tokio::sync::{broadcast, mpsc, oneshot};
 
 pub async fn complete_to_tx_packet<Ack: PacketRel, T: PacketDup>(
     rx_ack: &mut Receiver<Ack>,
-    pkid: u16,
+    packet_id: u16,
     duration: u64,
     tx: &Senders,
     packet: &mut T,
-) -> anyhow::Result<Ack> {
+) -> anyhow::Result<Ack, CommonErr> {
     let mut data = packet.data();
     let mut dup_data = Option::<Arc<Bytes>>::None;
-    if tx.tx_network_default(data).await.is_err() {
-        warn!("todo");
-    }
+    tx.tx_network_default(data).await?;
     loop {
-        let Ok(packet) = timeout_rx(rx_ack, pkid, duration).await else {
+        if let Ok(packet) =
+            tokio::time::timeout(Duration::from_secs(duration), timeout_rx(rx_ack, packet_id)).await
+        {
+            return Ok(packet?);
+        } else {
             let data = if let Some(data) = &dup_data {
                 data.clone()
             } else {
@@ -30,32 +31,51 @@ pub async fn complete_to_tx_packet<Ack: PacketRel, T: PacketDup>(
                 dup_data = Some(data.clone());
                 data
             };
-            if tx.tx_network_default(data.clone()).await.is_err() {
-                warn!("todo");
-            }
-            continue;
-        };
-        return Ok(packet);
+            tx.tx_network_default(data.clone()).await?;
+        }
     }
 }
 
-pub async fn timeout_rx<T: PacketRel>(
+async fn timeout_rx<T: PacketRel>(
     rx_ack: &mut Receiver<T>,
-    pkid: u16,
-    duration: u64,
-) -> anyhow::Result<T> {
-    let Ok(result) = tokio::time::timeout(Duration::from_secs(duration), _timeout_rx(rx_ack, pkid)).await else {
-        bail!("timeout");
-    };
-    result
-}
-
-async fn _timeout_rx<T: PacketRel>(rx_ack: &mut Receiver<T>, pkid: u16) -> anyhow::Result<T> {
-    while let Ok(msg) = rx_ack.recv().await {
-        if msg.is_rel(pkid) {
+    packet_id: u16,
+) -> anyhow::Result<T, CommonErr> {
+    loop {
+        let msg = rx_ack.recv().await?;
+        if msg.is_rel(packet_id) {
             debug!("rx success: {:?}", msg);
             return Ok(msg);
         }
     }
-    bail!("todo");
 }
+
+#[derive(Debug)]
+pub enum CommonErr {
+    ChannelAbnormal,
+}
+
+impl<T> From<broadcast::error::SendError<T>> for CommonErr {
+    fn from(_: broadcast::error::SendError<T>) -> Self {
+        Self::ChannelAbnormal
+    }
+}
+impl<T> From<mpsc::error::SendError<T>> for CommonErr {
+    fn from(_: mpsc::error::SendError<T>) -> Self {
+        Self::ChannelAbnormal
+    }
+}
+impl From<oneshot::error::RecvError> for CommonErr {
+    fn from(_: oneshot::error::RecvError) -> Self {
+        Self::ChannelAbnormal
+    }
+}
+impl From<broadcast::error::RecvError> for CommonErr {
+    fn from(_: broadcast::error::RecvError) -> Self {
+        Self::ChannelAbnormal
+    }
+}
+// impl From<Elapsed> for CommonErr {
+//     fn from(_: Elapsed) -> Self {
+//         Self::Elapsed
+//     }
+// }

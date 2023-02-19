@@ -9,6 +9,7 @@ use crate::v3_1_1::{MqttOptions, Publish, SubscribeFilter};
 use crate::QoS;
 use bytes::Bytes;
 use std::sync::Arc;
+use tokio::sync::{broadcast, mpsc};
 
 #[derive(Debug, Clone)]
 pub enum ClientCommand {
@@ -84,5 +85,22 @@ impl ClientData {
             ClientData::Subscribe(data) => data.packet_id(),
             ClientData::Unsubscribe(data) => data.packet_id(),
         }
+    }
+}
+#[derive(Debug, thiserror::Error)]
+pub enum ClientErr {
+    #[error("Disconnected")]
+    Disconnected,
+    #[error("PayloadTooLong")]
+    PayloadTooLong,
+}
+impl<T> From<broadcast::error::SendError<T>> for ClientErr {
+    fn from(_: broadcast::error::SendError<T>) -> Self {
+        Self::Disconnected
+    }
+}
+impl<T> From<mpsc::error::SendError<T>> for ClientErr {
+    fn from(_: mpsc::error::SendError<T>) -> Self {
+        Self::Disconnected
     }
 }

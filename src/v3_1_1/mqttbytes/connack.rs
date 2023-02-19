@@ -1,5 +1,5 @@
 use super::*;
-use bytes::{Buf, BufMut, Bytes, BytesMut};
+use bytes::{Buf, Bytes};
 
 /// Return code in connack
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -32,11 +32,6 @@ impl ConnAck {
             session_present,
             code,
         }
-    }
-
-    fn len(&self) -> usize {
-        // sesssion present + code
-        1 + 1
     }
 
     pub fn read(fixed_header: FixedHeader, mut bytes: Bytes) -> Result<Self, PacketParseError> {
@@ -96,7 +91,7 @@ mod test {
     use pretty_assertions::assert_eq;
 
     #[test]
-    fn connack_parsing_works() {
+    fn connack_parsing_works() -> anyhow::Result<()> {
         let mut stream = bytes::BytesMut::new();
         let packetstream = &[
             0b0010_0000,
@@ -110,9 +105,9 @@ mod test {
         ];
 
         stream.extend_from_slice(&packetstream[..]);
-        let fixed_header = parse_fixed_header(stream.iter()).unwrap();
+        let fixed_header = parse_fixed_header(stream.iter())?;
         let connack_bytes = stream.split_to(fixed_header.frame_length()).freeze();
-        let connack = ConnAck::read(fixed_header, connack_bytes).unwrap();
+        let connack = ConnAck::read(fixed_header, connack_bytes)?;
 
         assert_eq!(
             connack,
@@ -121,17 +116,19 @@ mod test {
                 code: ConnectReturnCode::Success,
             }
         );
+        Ok(())
     }
 
     #[test]
-    fn connack_encoding_works() {
-        let connack = ConnAck {
+    fn connack_encoding_works() -> anyhow::Result<()> {
+        let mut connack = ConnAck {
             session_present: true,
             code: ConnectReturnCode::Success,
         };
 
         let mut buf = BytesMut::new();
-        connack.write(&mut buf).unwrap();
+        connack.write(&mut buf)?;
         assert_eq!(buf, vec![0b0010_0000, 0x02, 0x01, 0x00]);
+        Ok(())
     }
 }

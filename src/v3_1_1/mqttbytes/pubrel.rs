@@ -1,7 +1,6 @@
 use super::*;
 use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
-use std::sync::Arc;
 
 /// QoS2 Publish release, in response to PUBREC packet
 #[derive(Debug, Clone, PartialEq, Eq)]
