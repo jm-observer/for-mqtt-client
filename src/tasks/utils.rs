@@ -15,7 +15,7 @@ pub async fn complete_to_tx_packet<Ack: PacketRel, T: PacketDup>(
     tx: &Senders,
     packet: &mut T,
 ) -> anyhow::Result<Ack, CommonErr> {
-    let mut data = packet.data();
+    let data = packet.data();
     let mut dup_data = Option::<Arc<Bytes>>::None;
     tx.tx_network_default(data).await?;
     loop {

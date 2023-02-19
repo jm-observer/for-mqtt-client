@@ -1,16 +1,16 @@
 mod data;
 
 use crate::tasks::task_network::{HubNetworkCommand, NetworkEvent, TaskNetwork};
-use crate::tasks::{BroadcastTx, Senders};
-use crate::v3_1_1::{qos, Connect, MqttOptions, Publish};
-use anyhow::{anyhow, bail, Context, Result};
+use crate::tasks::Senders;
+use crate::v3_1_1::{Connect, MqttOptions, Publish};
+use anyhow::Result;
 use log::{debug, error, info, warn};
 use ringbuf::{Consumer, Producer};
 use std::collections::{HashMap, VecDeque};
 use std::mem::MaybeUninit;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::broadcast::{channel, Receiver, Sender};
+use tokio::sync::broadcast::{channel, Sender};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::error::TryRecvError;
 use tokio::time::sleep;
@@ -19,7 +19,7 @@ use tokio::{select, spawn};
 use crate::tasks::task_client::data::MqttEvent;
 use crate::tasks::task_client::Client;
 use crate::tasks::task_hub::data::{
-    HubError, HubState, HubToConnectError, KeepAliveTime, Reason, State, ToDisconnectReason,
+    HubError, HubState, HubToConnectError, KeepAliveTime, ToDisconnectReason,
 };
 use crate::tasks::task_ping::TaskPing;
 use crate::tasks::task_publish::{
@@ -57,7 +57,7 @@ impl TaskHub {
             tx_to_user,
             client_data: Default::default(),
         };
-        let event_rx = client.init_receiver();
+        let _event_rx = client.init_receiver();
 
         spawn(async move {
             let (mut a, mut b) = ringbuf::SharedRb::new(65535).split();
@@ -100,7 +100,7 @@ impl TaskHub {
                         }
                     }
                 }
-                HubState::ToDisconnect(reason) => {
+                HubState::ToDisconnect(_reason) => {
                     rx_hub_msg.take();
                     rx_hub_network_event.take();
                     if let Some(senders) = senders.take() {
@@ -240,15 +240,15 @@ impl TaskHub {
         &mut self,
         req: HubMsg,
         a: &mut Producer<u16, Arc<SharedRb>>,
-        b: &mut Consumer<u16, Arc<SharedRb>>,
+        _b: &mut Consumer<u16, Arc<SharedRb>>,
         senders: &Senders,
     ) -> Result<(), HubError> {
         match req {
             HubMsg::RecoverId(id) => {
                 debug!("recover id: {}", id);
                 a.push(id)
-                    .map_err(|x| HubError::PacketIdErr("RecoverId Err".to_string()))?;
-                let Some(obj) = self.client_data.iter().enumerate().find(|(index, obj) | obj.packet_id() == id) else {
+                    .map_err(|_x| HubError::PacketIdErr("RecoverId Err".to_string()))?;
+                let Some(obj) = self.client_data.iter().enumerate().find(|(_index, obj) | obj.packet_id() == id) else {
                     return Err(HubError::PacketIdErr(format!("could find packet id = {:?}", id)))
                 };
                 self.client_data.remove(obj.0);
@@ -422,14 +422,4 @@ fn init_keep_alive_check(time: KeepAliveTime, keep_alive: u16, tx: mpsc::Sender<
             error!("fail to send keep alive check");
         }
     });
-}
-
-fn try_rx_client_command(
-    rx: &mut mpsc::Receiver<ClientCommand>,
-) -> Result<Option<ClientCommand>, HubError> {
-    match rx.try_recv() {
-        Ok(command) => Ok(Some(command)),
-        Err(TryRecvError::Empty) => Ok(None),
-        Err(TryRecvError::Disconnected) => Err(HubError::ChannelAbnormal),
-    }
 }

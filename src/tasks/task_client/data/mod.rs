@@ -5,10 +5,10 @@ pub use acks::*;
 pub use traces::*;
 
 use crate::tasks::task_network::ToConnectError;
-use crate::v3_1_1::{MqttOptions, Publish, SubscribeFilter};
-use crate::QoS;
-use bytes::Bytes;
-use std::sync::Arc;
+use crate::v3_1_1::{Publish};
+
+
+
 use tokio::sync::{broadcast, mpsc};
 
 #[derive(Debug, Clone)]

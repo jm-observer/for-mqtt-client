@@ -15,7 +15,7 @@ pub struct TaskSubscribe {
 impl TaskSubscribe {
     pub fn init(tx: Senders, trace_packet: TraceSubscribe) {
         spawn(async move {
-            let mut subscriber = Self { tx, trace_packet };
+            let subscriber = Self { tx, trace_packet };
             if let Err(e) = subscriber.run().await {
                 match e {
                     CommonErr::ChannelAbnormal => {}

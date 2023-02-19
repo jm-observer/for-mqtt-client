@@ -1,26 +1,19 @@
-use anyhow::{anyhow, Result};
-use anyhow::{bail, Context};
+use anyhow::Result;
+
 use bytes::{Bytes, BytesMut};
-use log::{debug, error, info, warn};
-use std::sync::Arc;
-use std::time::Duration;
+use log::{debug, error, warn};
+
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::select;
 use tokio::sync::mpsc;
-use tokio::sync::mpsc::error::TryRecvError;
-use tokio::time::sleep;
 
 mod data;
 
 use crate::tasks::task_hub::HubMsg;
-use crate::tasks::task_publish::PublishMsg;
-use crate::tasks::task_subscribe::SubscribeMsg;
+
 use crate::tasks::Senders;
-use crate::v3_1_1::{
-    read_from_network, ConnectReturnCode, Disconnect, Packet, PacketParseError, PingResp, PubAck,
-    PubComp, PubRec, PubRel, Publish, SubAck, UnsubAck,
-};
+use crate::v3_1_1::{read_from_network, ConnectReturnCode, Disconnect, Packet, PingResp};
 pub use data::*;
 
 #[derive(Clone, Debug)]
@@ -161,7 +154,7 @@ impl TaskNetwork {
         buf: &mut BytesMut,
     ) -> Result<bool, ToConnectError> {
         stream.write_all(self.connect_packet.as_ref()).await?;
-        let len = stream.read_buf(buf).await?;
+        let _len = stream.read_buf(buf).await?;
         let packet = read_from_network(buf)?;
         let packet_ty = packet.packet_ty();
         let Packet::ConnAck(ack) = packet else {
@@ -181,7 +174,7 @@ impl TaskNetwork {
             match read_from_network(buf) {
                 Ok(packet) => {
                     match packet {
-                        Packet::ConnAck(packet) => {
+                        Packet::ConnAck(_packet) => {
                             warn!("Unexpected ConnAck");
                         }
                         Packet::Publish(packet) => {
@@ -251,9 +244,9 @@ impl TaskNetwork {
     async fn deal_inner_msg(
         &mut self,
         stream: &mut TcpStream,
-        mut msg: DataWaitingToBeSend,
+        msg: DataWaitingToBeSend,
     ) -> Result<(), NetworkTasksError> {
-        let mut other_msg: bool = false;
+        let _other_msg: bool = false;
         let mut to_send_datas = vec![msg];
         while let Ok(data) = self.rx_data.try_recv() {
             to_send_datas.push(data);
@@ -289,28 +282,6 @@ impl TaskNetwork {
                 self.state = NetworkState::ToDisconnect;
                 Err(NetworkTasksError::HubCommandToDisconnect)
             }
-        }
-    }
-
-    async fn tx_publish_ack(&self, msg: PubAck) {
-        if self.senders.broadcast_tx.tx_pub_ack.send(msg).is_err() {
-            error!("fail to send publisher");
-        }
-    }
-    async fn tx_publish(&self, msg: Publish) {
-        if self
-            .senders
-            .tx_hub_msg
-            .send(HubMsg::RxPublish(msg))
-            .await
-            .is_err()
-        {
-            error!("fail to send publisher");
-        }
-    }
-    async fn tx_connect_rel(&self, msg: HubMsg) {
-        if self.senders.tx_hub_msg.send(msg).await.is_err() {
-            error!("fail to send connector");
         }
     }
 }

@@ -34,8 +34,6 @@ pub struct MqttOptions {
     max_outgoing_packet_size: usize,
     /// request (publish, subscribe) channel capacity
     request_channel_capacity: usize,
-    /// Max internal request batching
-    max_request_batch: usize,
     /// Minimum delay time between consecutive outgoing packets
     /// while retransmitting pending packets
     pending_throttle: Duration,
@@ -71,7 +69,6 @@ impl MqttOptions {
             max_incoming_packet_size: 10 * 1024,
             max_outgoing_packet_size: 10 * 1024,
             request_channel_capacity: 10,
-            max_request_batch: 0,
             pending_throttle: Duration::from_micros(0),
             inflight: 100,
             last_will: None,

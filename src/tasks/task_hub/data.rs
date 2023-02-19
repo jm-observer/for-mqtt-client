@@ -1,13 +1,8 @@
-use crate::datas::id::Id;
-use crate::datas::payload::Payload;
-use crate::tasks::task_client::data::{TracePublish, TraceSubscribe, TraceUnubscribe};
-use crate::tasks::task_network::NetworkEvent;
-use crate::v3_1_1::{ConnectReturnFailCode, Publish};
-use crate::{ClientCommand, QoS};
-use bytes::Bytes;
+use crate::v3_1_1::Publish;
+
 use std::default::Default;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Arc;
+
 use tokio::sync::{broadcast, mpsc};
 
 #[derive(Debug)]
@@ -25,35 +20,6 @@ pub enum HubMsg {
     AffirmRxPublish(u16),
 }
 
-#[derive(Debug, Clone)]
-pub enum State {
-    Connected,
-    UnConnected(Reason),
-}
-#[derive(Debug, Clone)]
-pub enum Reason {
-    Init,
-    NetworkErr(String),
-    PingFail,
-    BrokerRefuse(ConnectReturnFailCode),
-}
-
-impl Reason {
-    pub fn to_msg(&self) -> String {
-        match self {
-            Reason::Init => "init".to_string(),
-            Reason::NetworkErr(msg) => {
-                format!("NetworkErr: {}", msg)
-            }
-            Reason::PingFail => "PingFail".to_string(),
-
-            Reason::BrokerRefuse(code) => {
-                format!("BrokerRefuse: {:?}", code)
-            }
-        }
-    }
-}
-
 /// 仅限
 static KEEP_ALIVE_ID: AtomicU32 = AtomicU32::new(0);
 
@@ -69,25 +35,6 @@ pub struct KeepAliveTime(u32);
 impl KeepAliveTime {
     pub fn latest(&self) -> bool {
         self.0 == KEEP_ALIVE_ID.load(Ordering::Relaxed)
-    }
-}
-
-impl State {
-    pub fn is_connected(&self) -> bool {
-        match self {
-            State::Connected => true,
-            _ => false,
-        }
-    }
-}
-impl Default for State {
-    fn default() -> Self {
-        Self::UnConnected(Reason::default())
-    }
-}
-impl Default for Reason {
-    fn default() -> Self {
-        Self::Init
     }
 }
 
@@ -112,18 +59,6 @@ impl HubState {
             _ => false,
         }
     }
-    pub fn is_to_disconnect(&self) -> bool {
-        match self {
-            HubState::ToDisconnect(_) => true,
-            _ => false,
-        }
-    }
-    pub fn is_disconnected(&self) -> bool {
-        match self {
-            HubState::Disconnected => true,
-            _ => false,
-        }
-    }
 }
 
 impl Default for HubState {
@@ -133,15 +68,12 @@ impl Default for HubState {
 }
 #[derive(Debug)]
 pub enum ToDisconnectReason {
-    NetworkError(String),
     PingFail,
     ClientCommand,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum HubError {
-    // #[error("Network error")]
-    // NetworkError(String),
     #[error("channel abnormal")]
     ChannelAbnormal,
     #[error("StateErr {0}")]

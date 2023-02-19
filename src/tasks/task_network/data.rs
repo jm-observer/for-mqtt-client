@@ -1,13 +1,11 @@
 use crate::tasks::Receipter;
-use crate::v3_1_1::{
-    ConnectReturnCode, ConnectReturnFailCode, FixedHeaderError, PacketParseError, PacketType,
-};
+use crate::v3_1_1::{ConnectReturnFailCode, PacketParseError, PacketType};
 use bytes::Bytes;
-use std::fmt::{Debug, Formatter};
+use std::fmt::Debug;
 use std::ops::Deref;
 use std::sync::Arc;
 use tokio::io;
-use tokio::net::TcpStream;
+
 use tokio::sync::{broadcast, mpsc};
 
 #[derive(Debug)]
@@ -22,13 +20,6 @@ pub enum NetworkState {
 impl NetworkState {
     pub fn is_to_disconnected(&self) -> bool {
         if let Self::ToDisconnect = self {
-            true
-        } else {
-            false
-        }
-    }
-    pub fn is_to_connect(&self) -> bool {
-        if let Self::ToConnect = self {
             true
         } else {
             false
@@ -51,16 +42,6 @@ pub enum NetworkEvent {
     ConnectFail(ToConnectError),
     /// 中间突然断开，network task发送后即drop
     ConnectedErr(String),
-}
-
-impl NetworkEvent {
-    pub fn is_connected(&self) -> bool {
-        if let Self::Connected(_) = self {
-            true
-        } else {
-            false
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -155,12 +136,12 @@ impl From<ToConnectError> for NetworkTasksError {
 }
 
 impl From<ChannelAbnormal> for NetworkTasksError {
-    fn from(err: ChannelAbnormal) -> Self {
+    fn from(_err: ChannelAbnormal) -> Self {
         Self::ChannelAbnormal
     }
 }
 impl From<ChannelAbnormal> for ToConnectError {
-    fn from(err: ChannelAbnormal) -> Self {
+    fn from(_err: ChannelAbnormal) -> Self {
         Self::ChannelAbnormal
     }
 }
