@@ -1,7 +1,7 @@
 #![allow(dead_code, unused_mut, unused_imports, unused_variables)]
 
 use anyhow::Result;
-use for_mqtt_client::v3_1_1::MqttOptions;
+use for_mqtt_client::protocol::MqttOptions;
 use for_mqtt_client::MqttEvent;
 use for_mqtt_client::QoS;
 use log::LevelFilter::{Debug, Info};

@@ -7,8 +7,8 @@ use bytes::{Buf, BufMut, Bytes, BytesMut};
 use core::fmt;
 use std::slice::Iter;
 
-mod connack;
-mod connect;
+// mod connack;
+// mod connect;
 mod disconnect;
 mod ping;
 mod puback;
@@ -21,6 +21,7 @@ mod subscribe;
 mod unsuback;
 mod unsubscribe;
 
+use crate::protocol::PacketParseError;
 use crate::QoS;
 pub use connack::*;
 pub use connect::*;
@@ -156,150 +157,6 @@ impl FixedHeaderError {
         *self == Self::MalformedRemainingLength
     }
 }
-impl From<FixedHeaderError> for PacketParseError {
-    fn from(value: FixedHeaderError) -> Self {
-        match value {
-            FixedHeaderError::InsufficientBytes(len) => Self::InsufficientBytes(len),
-            FixedHeaderError::MalformedRemainingLength => Self::MalformedRemainingLength,
-        }
-    }
-}
-/// Error during serialization and deserialization
-#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
-pub enum PacketParseError {
-    #[error("Invalid Connect return code: {0}")]
-    InvalidConnectReturnCode(u8),
-    #[error("Invalid protocol")]
-    InvalidProtocol,
-    #[error("Invalid protocol level: {0}")]
-    InvalidProtocolLevel(u8),
-    #[error("Incorrect packet format")]
-    IncorrectPacketFormat,
-    #[error("Invalid packet type: {0}")]
-    InvalidPacketType(u8),
-    #[error("Invalid property type: {0}")]
-    InvalidPropertyType(u8),
-    #[error("Invalid QoS level: {0}")]
-    InvalidQoS(u8),
-    #[error("Invalid subscribe reason code: {0}")]
-    InvalidSubscribeReasonCode(u8),
-    #[error("Packet id Zero")]
-    PacketIdZero,
-    #[error("Payload size is incorrect")]
-    PayloadSizeIncorrect,
-    #[error("payload is too long")]
-    PayloadTooLong,
-    #[error("payload size limit exceeded: {0}")]
-    PayloadSizeLimitExceeded(usize),
-    #[error("Payload required")]
-    PayloadRequired,
-    #[error("Topic is not UTF-8")]
-    TopicNotUtf8,
-    #[error("Promised boundary crossed: {0}")]
-    BoundaryCrossed(usize),
-    #[error("Malformed packet")]
-    MalformedPacket,
-    #[error("A Subscribe packet must contain atleast one filter")]
-    EmptySubscription,
-    #[error("At least {0} more bytes required to frame packet")]
-    InsufficientBytes(usize),
-    #[error("Malformed remaining length")]
-    MalformedRemainingLength,
-}
-
-/// MQTT packet type
-#[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PacketType {
-    Connect = 1,
-    ConnAck,
-    Publish,
-    PubAck,
-    PubRec,
-    PubRel,
-    PubComp,
-    Subscribe,
-    SubAck,
-    Unsubscribe,
-    UnsubAck,
-    PingReq,
-    PingResp,
-    Disconnect,
-}
-
-/// Protocol type
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Protocol {
-    V4,
-    V5,
-}
-
-/// Packet type from a byte
-///
-/// ```text
-///          7                          3                          0
-///          +--------------------------+--------------------------+
-/// byte 1   | MQTT Control Packet Type | Flags for each type      |
-///          +--------------------------+--------------------------+
-///          |         Remaining Bytes Len  (1/2/3/4 bytes)        |
-///          +-----------------------------------------------------+
-///
-/// <https://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc385349207>
-/// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd)]
-pub struct FixedHeader {
-    /// First byte of the stream. Used to identify packet types and
-    /// several flags
-    byte1: u8,
-    /// Length of fixed header. Byte 1 + (1..4) bytes. So fixed header
-    /// len can vary from 2 bytes to 5 bytes
-    /// 1..4 bytes are variable length encoded to represent remaining length
-    fixed_header_len: usize,
-    /// Remaining length of the packet. Doesn't include fixed header bytes
-    /// Represents variable header + payload size
-    remaining_len: usize,
-}
-
-impl FixedHeader {
-    pub fn new(byte1: u8, remaining_len_len: usize, remaining_len: usize) -> FixedHeader {
-        FixedHeader {
-            byte1,
-            fixed_header_len: remaining_len_len + 1,
-            remaining_len,
-        }
-    }
-
-    pub fn packet_type(&self) -> Result<PacketType, PacketParseError> {
-        let num = self.byte1 >> 4;
-        match num {
-            1 => Ok(PacketType::Connect),
-            2 => Ok(PacketType::ConnAck),
-            3 => Ok(PacketType::Publish),
-            4 => Ok(PacketType::PubAck),
-            5 => Ok(PacketType::PubRec),
-            6 => Ok(PacketType::PubRel),
-            7 => Ok(PacketType::PubComp),
-            8 => Ok(PacketType::Subscribe),
-            9 => Ok(PacketType::SubAck),
-            10 => Ok(PacketType::Unsubscribe),
-            11 => Ok(PacketType::UnsubAck),
-            12 => Ok(PacketType::PingReq),
-            13 => Ok(PacketType::PingResp),
-            14 => Ok(PacketType::Disconnect),
-            _ => Err(PacketParseError::InvalidPacketType(num)),
-        }
-    }
-
-    /// Returns the size of full packet (fixed header + variable header + payload)
-    /// Fixed header is enough to get the size of a frame in the stream
-    pub fn frame_length(&self) -> usize {
-        self.fixed_header_len + self.remaining_len
-    }
-
-    pub fn remaining_len(&self) -> usize {
-        self.remaining_len
-    }
-}
 
 // pub fn check(stream: Iter<u8>) -> Result<FixedHeader, Error> {
 //     let stream_len = stream.len();
@@ -429,16 +286,6 @@ fn write_remaining_length(stream: &mut BytesMut, len: usize) -> usize {
         done = x == 0;
     }
     count
-}
-
-/// Maps a number to QoS
-pub fn qos(num: u8) -> Result<QoS, PacketParseError> {
-    match num {
-        0 => Ok(QoS::AtMostOnce),
-        1 => Ok(QoS::AtLeastOnce),
-        2 => Ok(QoS::ExactlyOnce),
-        qos => Err(PacketParseError::InvalidQoS(qos)),
-    }
 }
 
 /// After collecting enough bytes to frame a packet (packet's frame())

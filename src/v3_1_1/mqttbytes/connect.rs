@@ -1,5 +1,5 @@
 use super::*;
-use crate::v3_1_1::MqttOptions;
+use crate::protocol::MqttOptions;
 use anyhow::Result;
 use bytes::{Buf, Bytes};
 use std::sync::Arc;

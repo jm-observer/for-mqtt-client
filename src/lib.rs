@@ -1,17 +1,14 @@
 // #![allow(dead_code, unused_mut, unused_imports, unused_variables)]
 pub mod datas;
+pub mod protocol;
 mod tasks;
 pub mod traits;
 pub mod utils;
 pub mod v3_1_1;
 pub mod v5;
 
+use protocol::PacketParseError;
 pub use tasks::task_client::{data::*, Client};
-
-#[derive(Debug, Clone)]
-pub enum Transport {
-    Tcp,
-}
 
 /// Quality of service
 #[repr(u8)]
@@ -53,5 +50,15 @@ impl QoSWithPacketId {
             QoSWithPacketId::AtLeastOnce(packet_id) => Some(packet_id.clone()),
             QoSWithPacketId::ExactlyOnce(packet_id) => Some(packet_id.clone()),
         }
+    }
+}
+
+/// Maps a number to QoS
+pub fn qos(num: u8) -> Result<QoS, PacketParseError> {
+    match num {
+        0 => Ok(QoS::AtMostOnce),
+        1 => Ok(QoS::AtLeastOnce),
+        2 => Ok(QoS::ExactlyOnce),
+        qos => Err(PacketParseError::InvalidQoS(qos)),
     }
 }

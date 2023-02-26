@@ -12,8 +12,9 @@ mod data;
 
 use crate::tasks::task_hub::HubMsg;
 
+use crate::protocol::ConnectReturnCode;
 use crate::tasks::Senders;
-use crate::v3_1_1::{read_from_network, ConnectReturnCode, Disconnect, Packet, PingResp};
+use crate::v3_1_1::{read_from_network, Disconnect, Packet, PingResp};
 pub use data::*;
 
 #[derive(Clone, Debug)]

@@ -1,7 +1,7 @@
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 
+use crate::protocol::PacketParseError;
 use crate::v3_1_1::mqttbytes::{read_u16, Error, FixedHeader};
-use crate::v3_1_1::PacketParseError;
 
 /// Acknowledgement to unsubscribe
 #[derive(Debug, Clone, PartialEq, Eq)]

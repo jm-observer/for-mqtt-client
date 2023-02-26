@@ -5,7 +5,7 @@ pub use unacknowledged::*;
 
 use crate::tasks::task_network::{HubNetworkCommand, NetworkEvent, TaskNetwork};
 use crate::tasks::Senders;
-use crate::v3_1_1::{Connect, MqttOptions, Publish};
+use crate::v3_1_1::{Connect, Publish};
 use anyhow::Result;
 use log::{debug, error, info, warn};
 use ringbuf::{Consumer, Producer};
@@ -19,6 +19,7 @@ use tokio::sync::mpsc::error::TryRecvError;
 use tokio::time::sleep;
 use tokio::{select, spawn};
 
+use crate::protocol::MqttOptions;
 use crate::tasks::task_client::data::MqttEvent;
 use crate::tasks::task_client::Client;
 use crate::tasks::task_ping::TaskPing;
@@ -262,6 +263,7 @@ impl TaskHub {
                     a.push(id)
                         .map_err(|_x| HubError::PacketIdErr("RecoverId Err".to_string()))?;
                 } else {
+                    obj.to_acknowledge(senders).await;
                 }
             }
             HubMsg::PingSuccess => {

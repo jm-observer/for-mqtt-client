@@ -1,24 +1,6 @@
 use super::*;
 use bytes::{Buf, Bytes};
 
-/// Return code in connack
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
-pub enum ConnectReturnCode {
-    Success = 0,
-    Fail(ConnectReturnFailCode),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
-pub enum ConnectReturnFailCode {
-    RefusedProtocolVersion = 1,
-    BadClientId,
-    ServiceUnavailable,
-    BadUserNamePassword,
-    NotAuthorized,
-}
-
 /// Acknowledgement to connect packet
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConnAck {
@@ -61,27 +43,6 @@ impl ConnAck {
     //
     //     1 + count + len
     // }
-}
-
-/// Connection return code type
-fn connect_return(num: u8) -> Result<ConnectReturnCode, PacketParseError> {
-    match num {
-        0 => Ok(ConnectReturnCode::Success),
-        1 => Ok(ConnectReturnCode::Fail(
-            ConnectReturnFailCode::RefusedProtocolVersion,
-        )),
-        2 => Ok(ConnectReturnCode::Fail(ConnectReturnFailCode::BadClientId)),
-        3 => Ok(ConnectReturnCode::Fail(
-            ConnectReturnFailCode::ServiceUnavailable,
-        )),
-        4 => Ok(ConnectReturnCode::Fail(
-            ConnectReturnFailCode::BadUserNamePassword,
-        )),
-        5 => Ok(ConnectReturnCode::Fail(
-            ConnectReturnFailCode::NotAuthorized,
-        )),
-        num => Err(PacketParseError::InvalidConnectReturnCode(num)),
-    }
 }
 
 #[cfg(test)]
