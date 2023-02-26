@@ -1,4 +1,7 @@
 mod data;
+mod unacknowledged;
+
+pub use unacknowledged::*;
 
 use crate::tasks::task_network::{HubNetworkCommand, NetworkEvent, TaskNetwork};
 use crate::tasks::Senders;
@@ -18,16 +21,13 @@ use tokio::{select, spawn};
 
 use crate::tasks::task_client::data::MqttEvent;
 use crate::tasks::task_client::Client;
-use crate::tasks::task_hub::data::{
-    HubError, HubState, HubToConnectError, KeepAliveTime, ToDisconnectReason,
-};
 use crate::tasks::task_ping::TaskPing;
 use crate::tasks::task_publish::{
     TaskPublishQos0, TaskPublishQos1, TaskPublishQos2, TaskPublishRxQos1, TaskPublishRxQos2,
 };
 use crate::tasks::task_subscribe::{TaskSubscribe, TaskUnsubscribe};
-use crate::{ClientCommand, ClientData, QoS, QoSWithPacketId, TracePublish};
-pub use data::HubMsg;
+use crate::{ClientCommand, ClientData, QoSWithPacketId};
+pub use data::*;
 
 type SharedRb = ringbuf::SharedRb<u16, Vec<MaybeUninit<u16>>>;
 
@@ -37,7 +37,7 @@ pub struct TaskHub {
     tx_to_user: Sender<MqttEvent>,
     rx_publish: HashMap<u16, Publish>,
     rx_publish_id: HashMap<u16, u16>,
-    client_data: VecDeque<ClientData>,
+    client_data: VecDeque<UnacknowledgedClientData>,
     rx_client_data: mpsc::Receiver<ClientData>,
     rx_client_command: mpsc::Receiver<ClientCommand>,
 }
@@ -207,15 +207,15 @@ impl TaskHub {
                 .ok_or(HubToConnectError::ChannelAbnormal)?;
             match status {
                 NetworkEvent::Connected(session_present) => {
-                    debug!("Connected");
+                    debug!("Connected todo");
                     self.state = HubState::Connected;
                     self.tx_to_user
                         .send(MqttEvent::ConnectSuccess(session_present))?;
+                    for data in self.client_data.iter() {
+                        data.to_acknowledge(&senders).await;
+                    }
                     return Ok(Some((senders, rx_hub_msg, rx_hub_network_event)));
                 }
-                // NetworkEvent::Disconnected => {
-                //     warn!("should not to rx NetworkEvent::Disconnected when to_connect")
-                // }
                 NetworkEvent::ConnectedErr(reason) => {
                     warn!(
                         "should not to rx NetworkEvent::Disconnect({}) when to_connect",
@@ -246,13 +246,23 @@ impl TaskHub {
         match req {
             HubMsg::RecoverId(id) => {
                 debug!("recover id: {}", id);
-                a.push(id)
-                    .map_err(|_x| HubError::PacketIdErr("RecoverId Err".to_string()))?;
-                let Some(obj) = self.client_data.iter().enumerate().find(|(_index, obj) | obj.packet_id() == id) else {
-                    return Err(HubError::PacketIdErr(format!("could find packet id = {:?}", id)))
+                let Some((index, obj)) = self
+                    .client_data
+                    .iter_mut()
+                    .enumerate()
+                    .find(|(_index, obj)| {
+                        obj.packet_id() == id
+                    }) else
+                {
+                    return Ok(())
                 };
-                self.client_data.remove(obj.0);
-                self.init_keep_alive_check(senders);
+                if obj.acknowledge() {
+                    self.client_data.remove(index);
+                    self.init_keep_alive_check(senders);
+                    a.push(id)
+                        .map_err(|_x| HubError::PacketIdErr("RecoverId Err".to_string()))?;
+                } else {
+                }
             }
             HubMsg::PingSuccess => {
                 self.init_keep_alive_check(senders);
@@ -313,17 +323,27 @@ impl TaskHub {
     ) -> Result<(), HubError> {
         match req {
             ClientData::Subscribe(mut trace_subscribe) => {
-                trace_subscribe.set_packet_id(self.request_id(b).await?);
+                trace_subscribe.set_packet_id(b).await?;
                 self.client_data.push_back(trace_subscribe.clone().into());
                 TaskSubscribe::init(senders.clone(), trace_subscribe);
             }
-            ClientData::Publish(trace_publish) => {
-                self.publish_client_msg(trace_publish, b, senders).await?;
-            }
             ClientData::Unsubscribe(mut trace_unsubscribe) => {
-                trace_unsubscribe.set_packet_id(self.request_id(b).await?);
+                trace_unsubscribe.set_packet_id(b).await?;
                 self.client_data.push_back(trace_unsubscribe.clone().into());
                 TaskUnsubscribe::init(senders.clone(), trace_unsubscribe);
+            }
+            ClientData::PublishQoS0(packet) => {
+                TaskPublishQos0::init(senders.clone(), packet).await;
+            }
+            ClientData::PublishQoS1(mut packet) => {
+                packet.set_packet_id(b).await?;
+                self.client_data.push_back(packet.clone().into());
+                TaskPublishQos1::init(senders.clone(), packet).await;
+            }
+            ClientData::PublishQoS2(mut packet) => {
+                packet.set_packet_id(b).await?;
+                self.client_data.push_back(packet.clone().into());
+                TaskPublishQos2::init(senders.clone(), packet).await;
             }
         }
         Ok(())
@@ -344,16 +364,7 @@ impl TaskHub {
         }
         Ok(())
     }
-    async fn request_id(&mut self, b: &mut Consumer<u16, Arc<SharedRb>>) -> Result<u16, HubError> {
-        if let Some(id) = b.pop() {
-            debug!("request id: {}", id);
-            Ok(id)
-        } else {
-            Err(HubError::PacketIdErr(format!(
-                "buffer of packet id is empty"
-            )))
-        }
-    }
+
     /// 初始化一个keep alive的计时
     fn init_keep_alive_check(&self, senders: &Senders) {
         debug!("init_keep_alive_check");
@@ -362,32 +373,6 @@ impl TaskHub {
             self.options.keep_alive(),
             senders.tx_hub_msg.clone(),
         );
-    }
-
-    async fn publish_client_msg(
-        &mut self,
-        mut trace_publish: TracePublish,
-        b: &mut Consumer<u16, Arc<SharedRb>>,
-        senders: &Senders,
-    ) -> Result<(), HubError> {
-        match trace_publish.qos {
-            QoS::AtMostOnce => {
-                TaskPublishQos0::init(senders.clone(), trace_publish).await;
-            }
-            QoS::AtLeastOnce => {
-                let packet_id = self.request_id(b).await?;
-                trace_publish.set_packet_id(packet_id);
-                self.client_data.push_back(trace_publish.clone().into());
-                TaskPublishQos1::init(senders.clone(), trace_publish, packet_id).await;
-            }
-            QoS::ExactlyOnce => {
-                let packet_id = self.request_id(b).await?;
-                trace_publish.set_packet_id(packet_id);
-                self.client_data.push_back(trace_publish.clone().into());
-                TaskPublishQos2::init(senders.clone(), trace_publish, packet_id).await;
-            }
-        }
-        Ok(())
     }
 
     /// bool: if rx command

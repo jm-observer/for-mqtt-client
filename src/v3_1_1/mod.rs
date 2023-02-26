@@ -78,11 +78,9 @@ impl MqttOptions {
         }
     }
     /// 设置为自动重连，会默认设置clean_session=false
-    pub fn set_auto_reconnect(&mut self, auto_reconnect: bool) -> &mut Self {
-        self.auto_reconnect = auto_reconnect;
-        if self.auto_reconnect {
-            self.set_clean_session(false);
-        }
+    pub fn auto_reconnect(&mut self) -> &mut Self {
+        self.auto_reconnect = true;
+        self.set_clean_session(false);
         self
     }
 

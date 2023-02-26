@@ -1,27 +1,91 @@
 use crate::datas::id::Id;
+use std::marker::PhantomData;
+use std::mem::MaybeUninit;
 
+use crate::tasks::HubError;
 use crate::v3_1_1::SubscribeFilter;
-use crate::QoS;
+use crate::{AtLeastOnce, AtMostOnce, ExactlyOnce, QoS};
+use anyhow::Result;
 use bytes::Bytes;
+use log::debug;
+use ringbuf::Consumer;
 use std::sync::Arc;
 
+type SharedRb = ringbuf::SharedRb<u16, Vec<MaybeUninit<u16>>>;
+
 #[derive(Debug, Clone)]
-pub struct TracePublish {
-    id: u32,
-    packet_id: u16,
+pub struct TracePublishQos<T> {
+    pub(crate) id: u32,
     pub topic: Arc<String>,
-    pub qos: QoS,
+    pub packet_id: u16,
+    qos: PhantomData<T>,
     pub payload: Arc<Bytes>,
     pub retain: bool,
 }
 
-impl TracePublish {
-    pub fn new(topic: Arc<String>, qos: QoS, payload: Arc<Bytes>, retain: bool) -> Self {
+// impl TracePublish {
+//     pub fn new(topic: Arc<String>, qos: QoS, payload: Arc<Bytes>, retain: bool) -> Self {
+//         match qos {
+//             QoS::AtMostOnce => Self::QoS0(TracePublishQos {
+//                 id: Id::id(),
+//                 packet_id: 0,
+//                 topic,
+//                 qos: PhantomData,
+//                 payload,
+//                 retain,
+//             }),
+//             QoS::AtLeastOnce => Self::QoS1(TracePublishQos {
+//                 id: Id::id(),
+//                 packet_id: 0,
+//                 topic,
+//                 qos: PhantomData,
+//                 payload,
+//                 retain,
+//             }),
+//             QoS::ExactlyOnce => Self::QoS2(TracePublishQos {
+//                 id: Id::id(),
+//                 packet_id: 0,
+//                 topic,
+//                 qos: PhantomData,
+//                 payload,
+//                 retain,
+//             }),
+//         }
+//     }
+// pub fn id(&self) -> u32 {
+//     match self {
+//         TracePublish::QoS0(value) => value.id(),
+//         TracePublish::QoS1(value) => value.id(),
+//         TracePublish::QoS2(value) => value.id(),
+//     }
+// }
+
+// pub(crate) fn set_packet_id(&mut self, packet_id: u16) -> &mut Self {
+//     match self {
+//         TracePublish::QoS0(value) => {
+//             value.set_packet_id(packet_id);
+//         }
+//         TracePublish::QoS1(value) => {
+//             value.set_packet_id(packet_id);
+//         }
+//         TracePublish::QoS2(value) => {
+//             value.set_packet_id(packet_id);
+//         }
+//     };
+//     self
+// }
+// pub(crate) fn packet_id(&self) -> u16 {
+//     self.packet_id()
+// }
+// }
+
+impl<T> TracePublishQos<T> {
+    pub fn init(topic: Arc<String>, payload: Arc<Bytes>, retain: bool) -> Self {
         Self {
             id: Id::id(),
             packet_id: 0,
             topic,
-            qos,
+            qos: PhantomData,
             payload,
             retain,
         }
@@ -29,23 +93,25 @@ impl TracePublish {
     pub fn id(&self) -> u32 {
         self.id
     }
-
-    pub(crate) fn set_packet_id(&mut self, packet_id: u16) -> &mut Self {
-        self.packet_id = packet_id;
-        self
+    pub(crate) async fn set_packet_id(
+        &mut self,
+        b: &mut Consumer<u16, Arc<SharedRb>>,
+    ) -> Result<(), HubError> {
+        self.packet_id = request_id(b).await?;
+        Ok(())
     }
     pub(crate) fn packet_id(&self) -> u16 {
         self.packet_id
     }
 }
 
-impl PartialEq for TracePublish {
+impl<T> PartialEq for TracePublishQos<T> {
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id
     }
 }
 
-impl PartialEq<u32> for TracePublish {
+impl<T> PartialEq<u32> for TracePublishQos<T> {
     fn eq(&self, other: &u32) -> bool {
         self.id == *other
     }
@@ -53,7 +119,7 @@ impl PartialEq<u32> for TracePublish {
 
 #[derive(Debug, Clone)]
 pub struct TraceSubscribe {
-    pub id: u32,
+    pub(crate) id: u32,
     pub(crate) packet_id: u16,
     pub filters: Vec<SubscribeFilter>,
 }
@@ -66,9 +132,12 @@ impl TraceSubscribe {
             filters,
         }
     }
-    pub(crate) fn set_packet_id(&mut self, packet_id: u16) -> &mut Self {
-        self.packet_id = packet_id;
-        self
+    pub(crate) async fn set_packet_id(
+        &mut self,
+        b: &mut Consumer<u16, Arc<SharedRb>>,
+    ) -> Result<(), HubError> {
+        self.packet_id = request_id(b).await?;
+        Ok(())
     }
     pub(crate) fn packet_id(&self) -> u16 {
         self.packet_id
@@ -77,7 +146,7 @@ impl TraceSubscribe {
 
 #[derive(Debug, Clone)]
 pub struct TraceUnubscribe {
-    pub id: u32,
+    pub(crate) id: u32,
     pub(crate) packet_id: u16,
     pub topics: Vec<Arc<String>>,
 }
@@ -89,11 +158,25 @@ impl TraceUnubscribe {
             topics,
         }
     }
-    pub(crate) fn set_packet_id(&mut self, packet_id: u16) -> &mut Self {
-        self.packet_id = packet_id;
-        self
+    pub(crate) async fn set_packet_id(
+        &mut self,
+        b: &mut Consumer<u16, Arc<SharedRb>>,
+    ) -> Result<(), HubError> {
+        self.packet_id = request_id(b).await?;
+        Ok(())
     }
     pub(crate) fn packet_id(&self) -> u16 {
         self.packet_id
+    }
+}
+
+async fn request_id(b: &mut Consumer<u16, Arc<SharedRb>>) -> Result<u16, HubError> {
+    if let Some(id) = b.pop() {
+        debug!("request id: {}", id);
+        Ok(id)
+    } else {
+        Err(HubError::PacketIdErr(format!(
+            "buffer of packet id is empty"
+        )))
     }
 }

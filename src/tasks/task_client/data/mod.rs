@@ -2,13 +2,16 @@ mod acks;
 mod traces;
 
 pub use acks::*;
+use bytes::Bytes;
+use std::marker::PhantomData;
+use std::sync::Arc;
 pub use traces::*;
 
 use crate::tasks::task_network::ToConnectError;
-use crate::v3_1_1::{Publish};
+use crate::v3_1_1::Publish;
 
-
-
+use crate::datas::id::Id;
+use crate::{AtLeastOnce, AtMostOnce, ExactlyOnce, QoS};
 use tokio::sync::{broadcast, mpsc};
 
 #[derive(Debug, Clone)]
@@ -20,7 +23,9 @@ pub enum ClientCommand {
 }
 #[derive(Debug, Clone)]
 pub enum ClientData {
-    Publish(TracePublish),
+    PublishQoS0(TracePublishQos<AtMostOnce>),
+    PublishQoS1(TracePublishQos<AtLeastOnce>),
+    PublishQoS2(TracePublishQos<ExactlyOnce>),
     Subscribe(TraceSubscribe),
     Unsubscribe(TraceUnubscribe),
 }
@@ -62,11 +67,6 @@ impl From<u32> for MqttEvent {
     }
 }
 
-impl From<TracePublish> for ClientData {
-    fn from(data: TracePublish) -> Self {
-        ClientData::Publish(data)
-    }
-}
 impl From<TraceUnubscribe> for ClientData {
     fn from(data: TraceUnubscribe) -> Self {
         ClientData::Unsubscribe(data)
@@ -79,11 +79,21 @@ impl From<TraceSubscribe> for ClientData {
 }
 
 impl ClientData {
-    pub(crate) fn packet_id(&self) -> u16 {
+    pub fn id(&self) -> u32 {
         match self {
-            ClientData::Publish(data) => data.packet_id(),
-            ClientData::Subscribe(data) => data.packet_id(),
-            ClientData::Unsubscribe(data) => data.packet_id(),
+            ClientData::PublishQoS0(packet) => packet.id,
+            ClientData::PublishQoS1(packet) => packet.id,
+            ClientData::PublishQoS2(packet) => packet.id,
+            ClientData::Subscribe(packet) => packet.id,
+            ClientData::Unsubscribe(packet) => packet.id,
+        }
+    }
+
+    pub fn publish(topic: Arc<String>, qos: QoS, payload: Arc<Bytes>, retain: bool) -> Self {
+        match qos {
+            QoS::AtMostOnce => Self::PublishQoS0(TracePublishQos::init(topic, payload, retain)),
+            QoS::AtLeastOnce => Self::PublishQoS1(TracePublishQos::init(topic, payload, retain)),
+            QoS::ExactlyOnce => Self::PublishQoS2(TracePublishQos::init(topic, payload, retain)),
         }
     }
 }

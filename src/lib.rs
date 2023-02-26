@@ -4,6 +4,7 @@ mod tasks;
 pub mod traits;
 pub mod utils;
 pub mod v3_1_1;
+pub mod v5;
 
 pub use tasks::task_client::{data::*, Client};
 
@@ -20,6 +21,15 @@ pub enum QoS {
     AtLeastOnce = 1,
     ExactlyOnce = 2,
 }
+
+#[derive(Debug, Clone)]
+pub struct AtMostOnce;
+
+#[derive(Debug, Clone)]
+pub struct AtLeastOnce;
+
+#[derive(Debug, Clone)]
+pub struct ExactlyOnce;
 
 /// Quality of service
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd)]

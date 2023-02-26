@@ -1,8 +1,8 @@
-use crate::tasks::task_client::data::TracePublish;
+use crate::tasks::task_client::data::TracePublishQos;
 use crate::tasks::utils::CommonErr;
 use crate::tasks::Senders;
 use crate::v3_1_1::Publish;
-use crate::QoSWithPacketId;
+use crate::{AtMostOnce, QoSWithPacketId};
 use bytes::BytesMut;
 use log::debug;
 use tokio::spawn;
@@ -10,11 +10,11 @@ use tokio::spawn;
 /// consider the order in which pushlish   are repeated
 pub struct TaskPublishQos0 {
     tx: Senders,
-    trace_publish: TracePublish,
+    trace_publish: TracePublishQos<AtMostOnce>,
 }
 
 impl TaskPublishQos0 {
-    pub async fn init(tx: Senders, trace_publish: TracePublish) {
+    pub async fn init(tx: Senders, trace_publish: TracePublishQos<AtMostOnce>) {
         spawn(async move {
             let mut publish = Self { tx, trace_publish };
             if let Err(e) = publish.run().await {

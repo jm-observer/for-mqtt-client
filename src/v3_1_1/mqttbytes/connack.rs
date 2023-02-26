@@ -88,7 +88,6 @@ fn connect_return(num: u8) -> Result<ConnectReturnCode, PacketParseError> {
 mod test {
     use super::*;
     use bytes::BytesMut;
-    use pretty_assertions::assert_eq;
 
     #[test]
     fn connack_parsing_works() -> anyhow::Result<()> {

@@ -8,13 +8,14 @@ use tokio::sync::{broadcast, mpsc};
 #[derive(Debug)]
 pub enum HubMsg {
     // RequestId(tokio::sync::oneshot::Sender<u16>),
+    /// recover packet_id that used to publish/subscribe/unsubscribe by client.
     RecoverId(u16),
     PingSuccess,
     PingFail,
     KeepAlive(KeepAliveTime),
     /// 接收从broker发送的publish包
     RxPublish(Publish),
-    /// 接收的publish已经完成整个qos流程
+    /// 接收的publish已经完成整个qos流程. recover packet_id that used to publish by broker.
     AffirmRxId(u16),
     /// 确认qos=2的publish包
     AffirmRxPublish(u16),
