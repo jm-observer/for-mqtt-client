@@ -2,7 +2,7 @@ use crate::tasks::task_client::data::TracePublishQos;
 use crate::tasks::task_hub::HubMsg;
 use crate::tasks::utils::{complete_to_tx_packet, CommonErr};
 use crate::tasks::{Senders, TIMEOUT_TO_COMPLETE_TX};
-use crate::v3_1_1::{PubRel, Publish};
+use crate::v3_1_1::{Publish};
 use crate::{ExactlyOnce, QoSWithPacketId};
 use anyhow::Result;
 use log::debug;

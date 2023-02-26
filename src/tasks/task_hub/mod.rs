@@ -207,7 +207,7 @@ impl TaskHub {
                 .ok_or(HubToConnectError::ChannelAbnormal)?;
             match status {
                 NetworkEvent::Connected(session_present) => {
-                    debug!("Connected todo");
+                    debug!("Connected");
                     self.state = HubState::Connected;
                     self.tx_to_user
                         .send(MqttEvent::ConnectSuccess(session_present))?;

@@ -1,7 +1,8 @@
 use crate::tasks::task_hub::HubMsg;
+use crate::tasks::utils::CommonErr;
 use crate::tasks::Senders;
 use crate::v3_1_1::PingReq;
-use log::{debug, error};
+use log::debug;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::spawn;
@@ -16,10 +17,14 @@ impl TaskPing {
     pub fn init(tx: Senders) {
         spawn(async move {
             let mut ping = Self { tx };
-            ping._run().await;
+            if let Err(e) = ping.run().await {
+                match e {
+                    CommonErr::ChannelAbnormal => {}
+                }
+            }
         });
     }
-    async fn _run(&mut self) {
+    async fn run(&mut self) -> Result<(), CommonErr> {
         let data = Arc::new(PingReq::new());
         let mut rx_ack = self.tx.subscribe_ping();
         let mut timeout_time = 3;
@@ -34,10 +39,7 @@ impl TaskPing {
             } else {
                 timeout_time -= 1;
                 if timeout_time <= 0 {
-                    if let Err(_) = self.tx.tx_hub_msg.send(HubMsg::PingFail).await {
-                        error!("");
-                    }
-                    return;
+                    self.tx.tx_hub_msg.send(HubMsg::PingFail).await?
                 }
             }
         }
@@ -46,16 +48,13 @@ impl TaskPing {
             let result = timeout(Duration::from_secs(3), rx_ack.recv()).await;
             if let Ok(Ok(_)) = result {
                 debug!("ping resp recv success");
-                if let Err(_) = self.tx.tx_hub_msg.send(HubMsg::PingSuccess).await {
-                    error!("todo");
-                }
-                return;
+                self.tx.tx_hub_msg.send(HubMsg::PingSuccess).await?;
+                return Ok(());
             } else {
                 timeout_time -= 1;
             }
         }
-        if let Err(_) = self.tx.tx_hub_msg.send(HubMsg::PingFail).await {
-            error!("");
-        }
+        self.tx.tx_hub_msg.send(HubMsg::PingFail).await?;
+        Ok(())
     }
 }
