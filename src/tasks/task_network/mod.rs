@@ -12,9 +12,10 @@ mod data;
 
 use crate::tasks::task_hub::HubMsg;
 
-use crate::protocol::ConnectReturnCode;
+use crate::protocol::packet::{read_from_network, ConnectReturnCode};
+use crate::protocol::Protocol;
 use crate::tasks::Senders;
-use crate::v3_1_1::{read_from_network, Disconnect, Packet, PingResp};
+use crate::v3_1_1::{Disconnect, Packet, PingResp};
 pub use data::*;
 
 #[derive(Clone, Debug)]
@@ -30,6 +31,7 @@ pub struct TaskNetwork {
     rx_data: mpsc::Receiver<DataWaitingToBeSend>,
     rx_hub_network_command: mpsc::Receiver<HubNetworkCommand>,
     state: NetworkState,
+    version: Protocol,
 }
 
 /// 一旦断开就不再连接，交由hub去维护后续的连接
@@ -41,6 +43,7 @@ impl TaskNetwork {
         rx: mpsc::Receiver<DataWaitingToBeSend>,
         connect_packet: Bytes,
         rx_hub_network_command: mpsc::Receiver<HubNetworkCommand>,
+        version: Protocol,
     ) -> Self {
         Self {
             addr,
@@ -50,6 +53,7 @@ impl TaskNetwork {
             state: NetworkState::ToConnect,
             connect_packet,
             rx_hub_network_command,
+            version,
         }
     }
     pub fn run(mut self) {
@@ -156,7 +160,7 @@ impl TaskNetwork {
     ) -> Result<bool, ToConnectError> {
         stream.write_all(self.connect_packet.as_ref()).await?;
         let _len = stream.read_buf(buf).await?;
-        let packet = read_from_network(buf)?;
+        let packet = read_from_network(buf, &self.version)?;
         let packet_ty = packet.packet_ty();
         let Packet::ConnAck(ack) = packet else {
             return Err(ToConnectError::NotConnAck(packet_ty));
@@ -172,7 +176,7 @@ impl TaskNetwork {
         buf: &mut BytesMut,
     ) -> Result<(), NetworkTasksError> {
         loop {
-            match read_from_network(buf) {
+            match read_from_network(buf, &self.version) {
                 Ok(packet) => {
                     match packet {
                         Packet::ConnAck(_packet) => {

@@ -1,12 +1,12 @@
 use crate::tasks::Receipter;
-use crate::v3_1_1::PacketType;
 use bytes::Bytes;
 use std::fmt::Debug;
 use std::ops::Deref;
 use std::sync::Arc;
 use tokio::io;
 
-use crate::protocol::{ConnectReturnFailCode, PacketParseError};
+use crate::protocol::packet::ConnectReturnFailCode;
+use crate::protocol::{PacketParseError, PacketType};
 use tokio::sync::{broadcast, mpsc};
 
 #[derive(Debug)]

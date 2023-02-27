@@ -1,4 +1,9 @@
 use super::*;
+use crate::protocol::packet::{
+    read_mqtt_string, read_u16, read_u8, write_mqtt_string, write_remaining_length,
+};
+use crate::protocol::FixedHeader;
+use crate::qos;
 use anyhow::Result;
 use bytes::{Buf, Bytes};
 use std::sync::Arc;
@@ -145,6 +150,7 @@ impl fmt::Debug for SubscribeFilter {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::protocol::packet::parse_fixed_header;
     use bytes::BytesMut;
 
     #[test]

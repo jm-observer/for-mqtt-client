@@ -1,16 +1,14 @@
 use crate::tasks::TaskHub;
+use crate::v3_1_1::FixedHeaderError;
 use crate::Client;
+use packet::connect::will::LastWill;
 use std::sync::Arc;
 
-mod connack;
-mod connect;
-
-use crate::v3_1_1::FixedHeaderError;
-pub use connack::*;
-pub use connect::*;
+pub mod packet;
 
 #[derive(Debug, Clone)]
 pub struct MqttOptions {
+    pub(crate) protocol: Protocol,
     /// broker address that you want to connect to
     broker_addr: String,
     /// broker port
@@ -38,13 +36,14 @@ pub struct MqttOptions {
 }
 
 impl MqttOptions {
-    pub fn new<S: Into<Arc<String>>, T: Into<String>>(id: S, host: T, port: u16) -> MqttOptions {
+    pub fn new_v4<S: Into<Arc<String>>, T: Into<String>>(id: S, host: T, port: u16) -> MqttOptions {
         let id = id.into();
         if id.starts_with(' ') || id.is_empty() {
             panic!("Invalid client id");
         }
 
         MqttOptions {
+            protocol: Protocol::V4,
             broker_addr: host.into(),
             port,
             keep_alive: 60,
@@ -167,14 +166,14 @@ pub enum Protocol {
 pub struct FixedHeader {
     /// First byte of the stream. Used to identify packet types and
     /// several flags
-    byte1: u8,
+    pub(crate) byte1: u8,
     /// Length of fixed header. Byte 1 + (1..4) bytes. So fixed header
     /// len can vary from 2 bytes to 5 bytes
     /// 1..4 bytes are variable length encoded to represent remaining length
-    fixed_header_len: usize,
+    pub(crate) fixed_header_len: usize,
     /// Remaining length of the packet. Doesn't include fixed header bytes
     /// Represents variable header + payload size
-    remaining_len: usize,
+    pub(crate) remaining_len: usize,
 }
 
 impl FixedHeader {
@@ -248,6 +247,38 @@ impl From<FixedHeaderError> for PacketParseError {
     }
 }
 
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PropertyType {
+    PayloadFormatIndicator = 1,
+    MessageExpiryInterval = 2,
+    ContentType = 3,
+    ResponseTopic = 8,
+    CorrelationData = 9,
+    SubscriptionIdentifier = 11,
+    SessionExpiryInterval = 17,
+    AssignedClientIdentifier = 18,
+    ServerKeepAlive = 19,
+    AuthenticationMethod = 21,
+    AuthenticationData = 22,
+    RequestProblemInformation = 23,
+    WillDelayInterval = 24,
+    RequestResponseInformation = 25,
+    ResponseInformation = 26,
+    ServerReference = 28,
+    ReasonString = 31,
+    ReceiveMaximum = 33,
+    TopicAliasMaximum = 34,
+    TopicAlias = 35,
+    MaximumQos = 36,
+    RetainAvailable = 37,
+    UserProperty = 38,
+    MaximumPacketSize = 39,
+    WildcardSubscriptionAvailable = 40,
+    SubscriptionIdentifierAvailable = 41,
+    SharedSubscriptionAvailable = 42,
+}
+
 /// Error during serialization and deserialization
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum PacketParseError {
@@ -289,4 +320,97 @@ pub enum PacketParseError {
     InsufficientBytes(usize),
     #[error("Malformed remaining length")]
     MalformedRemainingLength,
+}
+
+fn property(num: u8) -> Result<PropertyType, PacketParseError> {
+    let property = match num {
+        1 => PropertyType::PayloadFormatIndicator,
+        2 => PropertyType::MessageExpiryInterval,
+        3 => PropertyType::ContentType,
+        8 => PropertyType::ResponseTopic,
+        9 => PropertyType::CorrelationData,
+        11 => PropertyType::SubscriptionIdentifier,
+        17 => PropertyType::SessionExpiryInterval,
+        18 => PropertyType::AssignedClientIdentifier,
+        19 => PropertyType::ServerKeepAlive,
+        21 => PropertyType::AuthenticationMethod,
+        22 => PropertyType::AuthenticationData,
+        23 => PropertyType::RequestProblemInformation,
+        24 => PropertyType::WillDelayInterval,
+        25 => PropertyType::RequestResponseInformation,
+        26 => PropertyType::ResponseInformation,
+        28 => PropertyType::ServerReference,
+        31 => PropertyType::ReasonString,
+        33 => PropertyType::ReceiveMaximum,
+        34 => PropertyType::TopicAliasMaximum,
+        35 => PropertyType::TopicAlias,
+        36 => PropertyType::MaximumQos,
+        37 => PropertyType::RetainAvailable,
+        38 => PropertyType::UserProperty,
+        39 => PropertyType::MaximumPacketSize,
+        40 => PropertyType::WildcardSubscriptionAvailable,
+        41 => PropertyType::SubscriptionIdentifierAvailable,
+        42 => PropertyType::SharedSubscriptionAvailable,
+        num => return Err(PacketParseError::InvalidPropertyType(num)),
+    };
+
+    Ok(property)
+}
+
+/// Checks if the stream has enough bytes to frame a packet and returns fixed header
+/// only if a packet can be framed with existing bytes in the `stream`.
+/// The passed stream doesn't modify parent stream's cursor. If this function
+/// returned an error, next `check` on the same parent stream is forced start
+/// with cursor at 0 again (Iter is owned. Only Iter's cursor is changed internally)
+// pub fn check(stream: Iter<u8>, max_packet_size: usize) -> Result<FixedHeader, PacketParseError> {
+//     // Create fixed header if there are enough bytes in the stream
+//     // to frame full packet
+//     let stream_len = stream.len();
+//     let fixed_header = parse_fixed_header(stream)?;
+//
+//     // Don't let rogue connections attack with huge payloads.
+//     // Disconnect them before reading all that data
+//     if fixed_header.remaining_len > max_packet_size {
+//         return Err(PacketParseError::PayloadSizeLimitExceeded(
+//             fixed_header.remaining_len,
+//         ));
+//     }
+//
+//     // If the current call fails due to insufficient bytes in the stream,
+//     // after calculating remaining length, we extend the stream
+//     let frame_length = fixed_header.frame_length();
+//     if stream_len < frame_length {
+//         return Err(PacketParseError::InsufficientBytes(
+//             frame_length - stream_len,
+//         ));
+//     }
+//
+//     Ok(fixed_header)
+// }
+
+/// Parses fixed header
+// fn parse_fixed_header(mut stream: Iter<u8>) -> Result<FixedHeader, PacketParseError> {
+//     // At least 2 bytes are necessary to frame a packet
+//     let stream_len = stream.len();
+//     if stream_len < 2 {
+//         return Err(PacketParseError::InsufficientBytes(2 - stream_len));
+//     }
+//
+//     let byte1 = stream.next().unwrap();
+//     let (len_len, len) = length(stream)?;
+//
+//     Ok(FixedHeader::new(*byte1, len_len, len))
+// }
+
+/// Return number of remaining length bytes required for encoding length
+fn len_len(len: usize) -> usize {
+    if len >= 2_097_152 {
+        4
+    } else if len >= 16_384 {
+        3
+    } else if len >= 128 {
+        2
+    } else {
+        1
+    }
 }

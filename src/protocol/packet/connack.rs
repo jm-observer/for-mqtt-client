@@ -1,11 +1,37 @@
-use crate::protocol::PacketParseError;
-use bytes::Bytes;
+use crate::protocol::packet::read_u8;
+use crate::protocol::{FixedHeader, PacketParseError, Protocol};
+use bytes::{Buf, Bytes};
 
 /// Acknowledgement to connect packet
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConnAck {
     pub session_present: bool,
     pub code: ConnectReturnCode,
+}
+
+impl ConnAck {
+    pub fn read(
+        fixed_header: FixedHeader,
+        mut bytes: Bytes,
+        version: &Protocol,
+    ) -> Result<Self, PacketParseError> {
+        let variable_header_index = fixed_header.fixed_header_len;
+        bytes.advance(variable_header_index);
+
+        let flags = read_u8(&mut bytes)?;
+        let return_code = read_u8(&mut bytes)?;
+
+        let session_present = (flags & 0x01) == 1;
+        let code = match version {
+            Protocol::V4 => connect_return_v3(return_code)?,
+            Protocol::V5 => connect_return_v5(return_code)?,
+        };
+        let conn_ack = ConnAck {
+            session_present,
+            code,
+        };
+        Ok(conn_ack)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,13 +55,13 @@ pub struct ConnAckProperties {
     pub authentication_data: Option<Bytes>,
 }
 
-/// Return code in connack
+/// Return code in conn ack
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
 pub enum ConnectReturnCode {
-    Success = 0,
+    Success,
     Fail(ConnectReturnFailCode),
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConnectReturnFailCode {
     FailV3(ConnectReturnFailCodeV3),
     FailV5(ConnectReturnCodeV5),
@@ -94,7 +120,7 @@ pub enum ConnectReturnCodeV5 {
 }
 
 /// Connection return code type
-fn connect_return(num: u8) -> Result<ConnectReturnCode, PacketParseError> {
+fn connect_return_v5(num: u8) -> Result<ConnectReturnCode, PacketParseError> {
     let code = match num {
         0 => ConnectReturnCode::Success,
         128 => ConnectReturnCodeV5::UnspecifiedError.into(),

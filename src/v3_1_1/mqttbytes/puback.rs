@@ -1,4 +1,6 @@
 use super::*;
+use crate::protocol::packet::{read_u16, write_remaining_length};
+use crate::protocol::FixedHeader;
 use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::sync::Arc;
@@ -54,6 +56,7 @@ impl PubAck {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::protocol::packet::parse_fixed_header;
     use bytes::BytesMut;
 
     #[test]

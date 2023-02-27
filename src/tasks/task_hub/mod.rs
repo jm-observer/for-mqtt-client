@@ -5,7 +5,7 @@ pub use unacknowledged::*;
 
 use crate::tasks::task_network::{HubNetworkCommand, NetworkEvent, TaskNetwork};
 use crate::tasks::Senders;
-use crate::v3_1_1::{Connect, Publish};
+use crate::v3_1_1::Publish;
 use anyhow::Result;
 use log::{debug, error, info, warn};
 use ringbuf::{Consumer, Producer};
@@ -19,6 +19,7 @@ use tokio::sync::mpsc::error::TryRecvError;
 use tokio::time::sleep;
 use tokio::{select, spawn};
 
+use crate::protocol::packet::Connect;
 use crate::protocol::MqttOptions;
 use crate::tasks::task_client::data::MqttEvent;
 use crate::tasks::task_client::Client;
@@ -197,8 +198,9 @@ impl TaskHub {
                 port,
                 senders.clone(),
                 rx_network_data,
-                Connect::new(&self.options),
+                Connect::new(&self.options).unwrap(),
                 rx_hub_network_command,
+                self.options.protocol.clone(),
             )
             .run();
             debug!("try to connect");

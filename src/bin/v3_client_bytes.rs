@@ -20,7 +20,7 @@ async fn main() -> Result<()> {
         .build_default()
         .log_to_stdout()
         .start();
-    let mut options = MqttOptions::new("abc111".to_string(), "broker.emqx.io".to_string(), 1883);
+    let mut options = MqttOptions::new_v4("abc111".to_string(), "broker.emqx.io".to_string(), 1883);
     options.set_keep_alive(30);
     let _client = options.connect().await;
     let mut event_rx = _client.init_receiver();

@@ -1,4 +1,6 @@
 use super::*;
+use crate::protocol::packet::{read_u16, read_u8, write_remaining_length};
+use crate::protocol::FixedHeader;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::convert::{TryFrom, TryInto};
 
@@ -87,6 +89,7 @@ impl TryFrom<u8> for SubscribeReasonCode {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::protocol::packet::parse_fixed_header;
     use bytes::BytesMut;
 
     #[test]

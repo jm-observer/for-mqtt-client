@@ -1,5 +1,6 @@
 use std::{str::Utf8Error, vec};
 
+use crate::{qos, QoS};
 /// This module is the place where all the protocol specifics gets abstracted
 /// out and creates a structures which are common across protocols. Since,
 /// MQTT is the core protocol that this broker supports, a lot of structs closely
@@ -18,7 +19,7 @@ pub struct PingResp;
 //--------------------------- Publish packet -------------------------------
 
 /// Publish packet
-#[derive(Clone, Debug, PartialEq, Eq, Default)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Publish {
     pub dup: bool,
     pub qos: QoS,
@@ -29,14 +30,15 @@ pub struct Publish {
 }
 
 impl Publish {
-    pub fn new<T: Into<String>, P: Into<Bytes>>(topic: T, qos: QoS, payload: P) -> Self {
-        let topic = Bytes::copy_from_slice(topic.into().as_bytes());
-        Self {
-            qos,
-            topic,
-            payload: payload.into(),
-            ..Default::default()
-        }
+    pub fn new<T: Into<String>, P: Into<Bytes>>(_topic: T, _qos: QoS, _payload: P) -> Self {
+        // let topic = Bytes::copy_from_slice(topic.into().as_bytes());
+        // Self {
+        //     qos,
+        //     topic,
+        //     payload: payload.into(),
+        //     ..Default::default()
+        // }
+        todo!()
     }
 
     /// Approximate length for meter
@@ -170,7 +172,7 @@ impl Subscribe {
 }
 
 ///  Subscription filter
-#[derive(Clone, Debug, PartialEq, Eq, Default)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Filter {
     pub path: String,
     pub qos: QoS,
@@ -180,12 +182,13 @@ pub struct Filter {
 }
 
 impl Filter {
-    pub fn new<T: Into<String>>(topic: T, qos: QoS) -> Self {
-        Self {
-            path: topic.into(),
-            qos,
-            ..Default::default()
-        }
+    pub fn new<T: Into<String>>(_topic: T, _qos: QoS) -> Self {
+        todo!()
+        // Self {
+        //     path: topic.into(),
+        //     qos,
+        //     ..Default::default()
+        // }
     }
 }
 
