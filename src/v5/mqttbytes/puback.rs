@@ -73,16 +73,6 @@ pub fn write(
     buffer.put_u16(puback.pkid);
 
     // Reason code is optional with success if there are no properties
-    if puback.reason == PubAckReason::Success && properties.is_none() {
-        return Ok(4);
-    }
-
-    buffer.put_u8(code(puback.reason));
-    if let Some(p) = properties {
-        properties::write(p, buffer)?;
-    } else {
-        write_remaining_length(buffer, 0)?;
-    }
 
     Ok(1 + count + len)
 }

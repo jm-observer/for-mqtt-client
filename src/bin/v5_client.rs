@@ -51,25 +51,25 @@ async fn main() -> Result<()> {
         }
         warn!("**************");
     });
-    println!(
-        "{:?}",
-        _client
-            .subscribe("abcfew".to_string(), QoS::ExactlyOnce)
-            .await
-    );
-    println!(
-        "{:?}",
-        _client
-            .subscribe("abcfewfe".to_string(), QoS::ExactlyOnce)
-            .await
-    );
-    println!(
-        "{:?}",
-        _client
-            .subscribe("abcfewwewew".to_string(), QoS::ExactlyOnce)
-            .await
-    );
-    sleep(Duration::from_secs(2)).await;
+    // println!(
+    //     "{:?}",
+    //     _client
+    //         .subscribe("abcfew".to_string(), QoS::ExactlyOnce)
+    //         .await
+    // );
+    // println!(
+    //     "{:?}",
+    //     _client
+    //         .subscribe("abcfewfe".to_string(), QoS::ExactlyOnce)
+    //         .await
+    // );
+    // println!(
+    //     "{:?}",
+    //     _client
+    //         .subscribe("abcfewwewew".to_string(), QoS::ExactlyOnce)
+    //         .await
+    // );
+    // sleep(Duration::from_secs(2)).await;
     info!(
         "{:?}",
         _client
@@ -81,37 +81,37 @@ async fn main() -> Result<()> {
             )
             .await?
     );
-    info!(
-        "{:?}",
-        _client
-            .publish(
-                "abcfew".to_string(),
-                QoS::ExactlyOnce,
-                "abc".as_bytes(),
-                false
-            )
-            .await?
-    );
-    info!(
-        "{:?}",
-        _client
-            .publish(
-                "abcfew".to_string(),
-                QoS::ExactlyOnce,
-                "abc".as_bytes(),
-                false
-            )
-            .await?
-    );
-    sleep(Duration::from_secs(2)).await;
-    _client.unsubscribe("abcfew".to_string()).await?;
-    sleep(Duration::from_secs(20)).await;
-    info!(
-        "{:?}",
-        _client
-            .publish("abcfew".to_string(), QoS::ExactlyOnce, "abc", false)
-            .await?
-    );
+    // info!(
+    //     "{:?}",
+    //     _client
+    //         .publish(
+    //             "abcfew".to_string(),
+    //             QoS::ExactlyOnce,
+    //             "abc".as_bytes(),
+    //             false
+    //         )
+    //         .await?
+    // );
+    // info!(
+    //     "{:?}",
+    //     _client
+    //         .publish(
+    //             "abcfew".to_string(),
+    //             QoS::ExactlyOnce,
+    //             "abc".as_bytes(),
+    //             false
+    //         )
+    //         .await?
+    // );
+    // sleep(Duration::from_secs(2)).await;
+    // _client.unsubscribe("abcfew".to_string()).await?;
+    // sleep(Duration::from_secs(20)).await;
+    // info!(
+    //     "{:?}",
+    //     _client
+    //         .publish("abcfew".to_string(), QoS::ExactlyOnce, "abc", false)
+    //         .await?
+    // );
 
     sleep(Duration::from_secs(120)).await;
     Ok(())

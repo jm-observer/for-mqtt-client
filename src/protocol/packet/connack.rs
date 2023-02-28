@@ -1,12 +1,16 @@
-use crate::protocol::packet::read_u8;
-use crate::protocol::{FixedHeader, PacketParseError, Protocol};
+use crate::protocol::packet::{
+    length, read_mqtt_bytes, read_mqtt_string, read_u16, read_u32, read_u8,
+};
+use crate::protocol::{property, FixedHeader, PacketParseError, PropertyType, Protocol};
 use bytes::{Buf, Bytes};
+use log::debug;
 
 /// Acknowledgement to connect packet
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConnAck {
     pub session_present: bool,
     pub code: ConnectReturnCode,
+    pub properties: Option<ConnAckProperties>,
 }
 
 impl ConnAck {
@@ -21,15 +25,28 @@ impl ConnAck {
         let flags = read_u8(&mut bytes)?;
         let return_code = read_u8(&mut bytes)?;
 
-        let session_present = (flags & 0x01) == 1;
-        let code = match version {
-            Protocol::V4 => connect_return_v3(return_code)?,
-            Protocol::V5 => connect_return_v5(return_code)?,
+        let conn_ack = match version {
+            Protocol::V4 => {
+                let session_present = (flags & 0x01) == 1;
+                let code = connect_return_v3(return_code)?;
+                ConnAck {
+                    session_present,
+                    code,
+                    properties: None,
+                }
+            }
+            Protocol::V5 => {
+                let properties = ConnAckProperties::read(&mut bytes)?;
+                let session_present = (flags & 0x01) == 1;
+                let code = connect_return_v5(return_code)?;
+                ConnAck {
+                    session_present,
+                    code,
+                    properties,
+                }
+            }
         };
-        let conn_ack = ConnAck {
-            session_present,
-            code,
-        };
+        debug!("{:?}", conn_ack);
         Ok(conn_ack)
     }
 }
@@ -168,5 +185,140 @@ impl From<ConnectReturnFailCodeV3> for ConnectReturnCode {
 impl From<ConnectReturnCodeV5> for ConnectReturnCode {
     fn from(value: ConnectReturnCodeV5) -> Self {
         Self::Fail(ConnectReturnFailCode::FailV5(value))
+    }
+}
+
+impl ConnAckProperties {
+    pub fn read(bytes: &mut Bytes) -> Result<Option<ConnAckProperties>, PacketParseError> {
+        let mut session_expiry_interval = None;
+        let mut receive_max = None;
+        let mut max_qos = None;
+        let mut retain_available = None;
+        let mut max_packet_size = None;
+        let mut assigned_client_identifier = None;
+        let mut topic_alias_max = None;
+        let mut reason_string = None;
+        let mut user_properties = Vec::new();
+        let mut wildcard_subscription_available = None;
+        let mut subscription_identifiers_available = None;
+        let mut shared_subscription_available = None;
+        let mut server_keep_alive = None;
+        let mut response_information = None;
+        let mut server_reference = None;
+        let mut authentication_method = None;
+        let mut authentication_data = None;
+
+        let (properties_len_len, properties_len) = length(bytes.iter())?;
+        bytes.advance(properties_len_len);
+        if properties_len == 0 {
+            return Ok(None);
+        }
+
+        let mut cursor = 0;
+        // read until cursor reaches property length. properties_len = 0 will skip this loop
+        while cursor < properties_len {
+            let prop = read_u8(bytes)?;
+            cursor += 1;
+
+            match property(prop)? {
+                PropertyType::SessionExpiryInterval => {
+                    session_expiry_interval = Some(read_u32(bytes)?);
+                    cursor += 4;
+                }
+                PropertyType::ReceiveMaximum => {
+                    receive_max = Some(read_u16(bytes)?);
+                    cursor += 2;
+                }
+                PropertyType::MaximumQos => {
+                    max_qos = Some(read_u8(bytes)?);
+                    cursor += 1;
+                }
+                PropertyType::RetainAvailable => {
+                    retain_available = Some(read_u8(bytes)?);
+                    cursor += 1;
+                }
+                PropertyType::AssignedClientIdentifier => {
+                    let id = read_mqtt_string(bytes)?;
+                    cursor += 2 + id.len();
+                    assigned_client_identifier = Some(id);
+                }
+                PropertyType::MaximumPacketSize => {
+                    max_packet_size = Some(read_u32(bytes)?);
+                    cursor += 4;
+                }
+                PropertyType::TopicAliasMaximum => {
+                    topic_alias_max = Some(read_u16(bytes)?);
+                    cursor += 2;
+                }
+                PropertyType::ReasonString => {
+                    let reason = read_mqtt_string(bytes)?;
+                    cursor += 2 + reason.len();
+                    reason_string = Some(reason);
+                }
+                PropertyType::UserProperty => {
+                    let key = read_mqtt_string(bytes)?;
+                    let value = read_mqtt_string(bytes)?;
+                    cursor += 2 + key.len() + 2 + value.len();
+                    user_properties.push((key, value));
+                }
+                PropertyType::WildcardSubscriptionAvailable => {
+                    wildcard_subscription_available = Some(read_u8(bytes)?);
+                    cursor += 1;
+                }
+                PropertyType::SubscriptionIdentifierAvailable => {
+                    subscription_identifiers_available = Some(read_u8(bytes)?);
+                    cursor += 1;
+                }
+                PropertyType::SharedSubscriptionAvailable => {
+                    shared_subscription_available = Some(read_u8(bytes)?);
+                    cursor += 1;
+                }
+                PropertyType::ServerKeepAlive => {
+                    server_keep_alive = Some(read_u16(bytes)?);
+                    cursor += 2;
+                }
+                PropertyType::ResponseInformation => {
+                    let info = read_mqtt_string(bytes)?;
+                    cursor += 2 + info.len();
+                    response_information = Some(info);
+                }
+                PropertyType::ServerReference => {
+                    let reference = read_mqtt_string(bytes)?;
+                    cursor += 2 + reference.len();
+                    server_reference = Some(reference);
+                }
+                PropertyType::AuthenticationMethod => {
+                    let method = read_mqtt_string(bytes)?;
+                    cursor += 2 + method.len();
+                    authentication_method = Some(method);
+                }
+                PropertyType::AuthenticationData => {
+                    let data = read_mqtt_bytes(bytes)?;
+                    cursor += 2 + data.len();
+                    authentication_data = Some(data);
+                }
+                _ => return Err(PacketParseError::InvalidPropertyType(prop)),
+            }
+        }
+
+        Ok(Some(ConnAckProperties {
+            session_expiry_interval,
+            receive_max,
+            max_qos,
+            retain_available,
+            max_packet_size,
+            assigned_client_identifier,
+            topic_alias_max,
+            reason_string,
+            user_properties,
+            wildcard_subscription_available,
+            subscription_identifiers_available,
+            shared_subscription_available,
+            server_keep_alive,
+            response_information,
+            server_reference,
+            authentication_method,
+            authentication_data,
+        }))
     }
 }

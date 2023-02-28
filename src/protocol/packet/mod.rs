@@ -1,5 +1,7 @@
-mod connack;
+pub(crate) mod connack;
 pub(crate) mod connect;
+pub(crate) mod puback;
+pub(crate) mod publish;
 
 use crate::protocol::{FixedHeader, PacketParseError, PacketType, Protocol};
 use crate::v3_1_1::{

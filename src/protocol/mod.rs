@@ -161,6 +161,12 @@ pub enum Protocol {
     V5,
 }
 
+impl Protocol {
+    pub fn is_v5(&self) -> bool {
+        *self == Protocol::V5
+    }
+}
+
 /// Packet type from a byte
 ///
 /// ```text
