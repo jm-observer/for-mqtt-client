@@ -60,15 +60,19 @@ impl Connect {
                 + 1            // connect flags
                 + 2; // keep alive
 
-            if let Some(p) = &self.connect_properties {
-                let properties_len = p.len();
-                let properties_len_len = len_len(properties_len);
-                len += properties_len_len + properties_len;
-            } else {
-                // just 1 byte representing 0 len
-                len += 1;
+            match self.protocol {
+                Protocol::V4 => {}
+                Protocol::V5 => {
+                    if let Some(p) = &self.connect_properties {
+                        let properties_len = p.len();
+                        let properties_len_len = len_len(properties_len);
+                        len += properties_len_len + properties_len;
+                    } else {
+                        // just 1 byte representing 0 len
+                        len += 1;
+                    }
+                }
             }
-
             len += 2 + &self.client_id.len();
 
             // last will len
@@ -88,31 +92,31 @@ impl Connect {
         let count = write_remaining_length(buffer, len);
         write_mqtt_string(buffer, "MQTT");
 
-        match self.protocol {
-            Protocol::V4 => {
-                buffer.put_u8(0x04);
-            }
-            Protocol::V5 => {
-                buffer.put_u8(0x05);
-            }
-        }
-
         let flags_index = 1 + count + 2 + 4 + 1;
 
         let mut connect_flags = 0;
         if self.clean_session {
             connect_flags |= 0x02;
         }
-
-        buffer.put_u8(connect_flags);
-        buffer.put_u16(self.keep_alive);
-
-        match &self.connect_properties {
-            Some(p) => p.write(buffer)?,
-            None => {
-                write_remaining_length(buffer, 0);
+        match self.protocol {
+            Protocol::V4 => {
+                buffer.put_u8(0x04);
+                buffer.put_u8(connect_flags);
+                buffer.put_u16(self.keep_alive);
             }
-        };
+            Protocol::V5 => {
+                buffer.put_u8(0x05);
+                buffer.put_u8(connect_flags);
+                buffer.put_u16(self.keep_alive);
+
+                match &self.connect_properties {
+                    Some(p) => p.write(buffer)?,
+                    None => {
+                        write_remaining_length(buffer, 0);
+                    }
+                };
+            }
+        }
 
         write_mqtt_string(buffer, &&self.client_id);
 

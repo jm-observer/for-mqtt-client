@@ -37,13 +37,24 @@ pub struct MqttOptions {
 
 impl MqttOptions {
     pub fn new_v4<S: Into<Arc<String>>, T: Into<String>>(id: S, host: T, port: u16) -> MqttOptions {
+        Self::new(id, host, port, Protocol::V4)
+    }
+    pub fn new_v5<S: Into<Arc<String>>, T: Into<String>>(id: S, host: T, port: u16) -> MqttOptions {
+        Self::new(id, host, port, Protocol::V5)
+    }
+    fn new<S: Into<Arc<String>>, T: Into<String>>(
+        id: S,
+        host: T,
+        port: u16,
+        protocol: Protocol,
+    ) -> MqttOptions {
         let id = id.into();
         if id.starts_with(' ') || id.is_empty() {
             panic!("Invalid client id");
         }
 
         MqttOptions {
-            protocol: Protocol::V4,
+            protocol,
             broker_addr: host.into(),
             port,
             keep_alive: 60,
