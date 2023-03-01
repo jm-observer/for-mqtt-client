@@ -1,12 +1,12 @@
 pub(crate) mod connack;
 pub(crate) mod connect;
-pub(crate) mod puback;
-pub(crate) mod pubcomp;
+// pub(crate) mod puback;
+// pub(crate) mod pubcomp;
+mod pubcommon;
 pub(crate) mod publish;
-pub(crate) mod pubrec;
-pub(crate) mod pubrel;
+// pub(crate) mod pubrel;
 
-use crate::protocol::packet::puback::PubAck;
+pub use crate::protocol::packet::pubcommon::{PubAck, PubComp, PubRec, PubRel};
 use crate::protocol::packet::publish::Publish;
 use crate::protocol::{FixedHeader, PacketParseError, PacketType, Protocol};
 use crate::v3_1_1::{

@@ -1,4 +1,4 @@
-use crate::protocol::packet::puback::PubAck;
+use crate::protocol::packet::PubAck;
 use crate::protocol::Protocol;
 use crate::tasks::task_hub::HubMsg;
 use crate::tasks::utils::CommonErr;
