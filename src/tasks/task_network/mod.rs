@@ -12,10 +12,10 @@ mod data;
 
 use crate::tasks::task_hub::HubMsg;
 
-use crate::protocol::packet::{read_from_network, ConnectReturnCode};
+use crate::protocol::packet::{read_from_network, ConnectReturnCode, Packet};
 use crate::protocol::Protocol;
 use crate::tasks::Senders;
-use crate::v3_1_1::{Disconnect, Packet, PingResp};
+use crate::v3_1_1::{Disconnect, PingResp};
 pub use data::*;
 
 #[derive(Clone, Debug)]
@@ -160,7 +160,7 @@ impl TaskNetwork {
     ) -> Result<bool, ToConnectError> {
         stream.write_all(self.connect_packet.as_ref()).await?;
         let _len = stream.read_buf(buf).await?;
-        let packet = read_from_network(buf, &self.version)?;
+        let packet = read_from_network(buf, self.version)?;
         let packet_ty = packet.packet_ty();
         let Packet::ConnAck(ack) = packet else {
             return Err(ToConnectError::NotConnAck(packet_ty));
@@ -176,7 +176,7 @@ impl TaskNetwork {
         buf: &mut BytesMut,
     ) -> Result<(), NetworkTasksError> {
         loop {
-            match read_from_network(buf, &self.version) {
+            match read_from_network(buf, self.version) {
                 Ok(packet) => {
                     match packet {
                         Packet::ConnAck(_packet) => {
@@ -229,9 +229,11 @@ impl TaskNetwork {
                                 error!("fail to send UnsubAck");
                                 return Err(NetworkTasksError::ChannelAbnormal);
                             }
-                        }
-                        Packet::PingResp => {
-                            self.senders.broadcast_tx.tx_ping.send(PingResp)?;
+                        } // Packet::PingResp => {
+                        //     self.senders.broadcast_tx.tx_ping.send(PingResp)?;
+                        // }
+                        _ => {
+                            todo!()
                         }
                     };
                 }

@@ -8,9 +8,9 @@ use std::sync::Arc;
 pub use traces::*;
 
 use crate::tasks::task_network::ToConnectError;
-use crate::v3_1_1::Publish;
 
-
+use crate::protocol::packet::publish::Publish;
+use crate::protocol::Protocol;
 use crate::{AtLeastOnce, AtMostOnce, ExactlyOnce, QoS};
 use tokio::sync::{broadcast, mpsc};
 
@@ -89,11 +89,23 @@ impl ClientData {
         }
     }
 
-    pub fn publish(topic: Arc<String>, qos: QoS, payload: Arc<Bytes>, retain: bool) -> Self {
+    pub fn publish(
+        topic: Arc<String>,
+        qos: QoS,
+        payload: Arc<Bytes>,
+        retain: bool,
+        protocol: Protocol,
+    ) -> Self {
         match qos {
-            QoS::AtMostOnce => Self::PublishQoS0(TracePublishQos::init(topic, payload, retain)),
-            QoS::AtLeastOnce => Self::PublishQoS1(TracePublishQos::init(topic, payload, retain)),
-            QoS::ExactlyOnce => Self::PublishQoS2(TracePublishQos::init(topic, payload, retain)),
+            QoS::AtMostOnce => {
+                Self::PublishQoS0(TracePublishQos::init(topic, payload, retain, protocol))
+            }
+            QoS::AtLeastOnce => {
+                Self::PublishQoS1(TracePublishQos::init(topic, payload, retain, protocol))
+            }
+            QoS::ExactlyOnce => {
+                Self::PublishQoS2(TracePublishQos::init(topic, payload, retain, protocol))
+            }
         }
     }
 }

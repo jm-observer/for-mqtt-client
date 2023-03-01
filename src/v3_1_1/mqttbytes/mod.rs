@@ -10,11 +10,11 @@ use core::fmt;
 // mod connect;
 mod disconnect;
 mod ping;
-mod puback;
-mod pubcomp;
-mod publish;
-mod pubrec;
-mod pubrel;
+// mod puback;
+// mod pubcomp;
+// mod publish;
+// mod pubrec;
+// mod pubrel;
 mod suback;
 mod subscribe;
 mod unsuback;
@@ -24,48 +24,47 @@ use crate::protocol::{PacketParseError, PacketType};
 use crate::QoS;
 // pub use connack::*;
 // pub use connect::*;
-use crate::protocol::packet::ConnAck;
 pub use disconnect::*;
 pub use ping::*;
-pub use puback::*;
-pub use pubcomp::*;
-pub use publish::*;
-pub use pubrec::*;
-pub use pubrel::*;
+// pub use puback::*;
+// pub use pubcomp::*;
+// pub use publish::*;
+// pub use pubrec::*;
+// pub use pubrel::*;
 pub use suback::*;
 pub use subscribe::*;
 pub use unsuback::*;
 pub use unsubscribe::*;
 
 /// Encapsulates all MQTT packet types
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Packet {
-    ConnAck(ConnAck),
-    Publish(Publish),
-    PubAck(PubAck),
-    PubRec(PubRec),
-    PubRel(PubRel),
-    PubComp(PubComp),
-    SubAck(SubAck),
-    UnsubAck(UnsubAck),
-    PingResp,
-}
-
-impl Packet {
-    pub fn packet_ty(&self) -> PacketType {
-        match self {
-            Packet::ConnAck(_) => PacketType::ConnAck,
-            Packet::Publish(_) => PacketType::Publish,
-            Packet::PubAck(_) => PacketType::PubAck,
-            Packet::PubRec(_) => PacketType::PubRec,
-            Packet::PubRel(_) => PacketType::PubRel,
-            Packet::PubComp(_) => PacketType::PubComp,
-            Packet::SubAck(_) => PacketType::SubAck,
-            Packet::UnsubAck(_) => PacketType::UnsubAck,
-            Packet::PingResp => PacketType::PingResp,
-        }
-    }
-}
+// #[derive(Debug, Clone, PartialEq, Eq)]
+// pub enum Packet {
+//     ConnAck(ConnAck),
+//     // Publish(Publish),
+//     PubAck(PubAck),
+//     PubRec(PubRec),
+//     PubRel(PubRel),
+//     PubComp(PubComp),
+//     SubAck(SubAck),
+//     UnsubAck(UnsubAck),
+//     PingResp,
+// }
+//
+// impl Packet {
+//     pub fn packet_ty(&self) -> PacketType {
+//         match self {
+//             Packet::ConnAck(_) => PacketType::ConnAck,
+//             // Packet::Publish(_) => PacketType::Publish,
+//             Packet::PubAck(_) => PacketType::PubAck,
+//             Packet::PubRec(_) => PacketType::PubRec,
+//             Packet::PubRel(_) => PacketType::PubRel,
+//             Packet::PubComp(_) => PacketType::PubComp,
+//             Packet::SubAck(_) => PacketType::SubAck,
+//             Packet::UnsubAck(_) => PacketType::UnsubAck,
+//             Packet::PingResp => PacketType::PingResp,
+//         }
+//     }
+// }
 
 /// Error during serialization and deserialization
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]

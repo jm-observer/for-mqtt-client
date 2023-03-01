@@ -75,7 +75,7 @@ async fn main() -> Result<()> {
         _client
             .publish(
                 "abcfew".to_string(),
-                QoS::ExactlyOnce,
+                QoS::AtMostOnce,
                 "abc".as_bytes(),
                 false
             )

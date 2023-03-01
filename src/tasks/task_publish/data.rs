@@ -1,4 +1,5 @@
-use crate::v3_1_1::{PubAck, PubComp, PubRec, PubRel, Publish};
+use crate::protocol::packet::puback::PubAck;
+use crate::protocol::packet::publish::Publish;
 
 #[derive(Clone, Debug)]
 pub enum PublishMsg {

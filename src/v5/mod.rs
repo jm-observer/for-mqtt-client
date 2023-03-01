@@ -375,110 +375,13 @@ pub enum DisconnectReasonCode {
 
 //--------------------------- PubRec packet -------------------------------
 
-/// Return code in connack
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
-pub enum PubRecReason {
-    Success,
-    NoMatchingSubscribers,
-    UnspecifiedError,
-    ImplementationSpecificError,
-    NotAuthorized,
-    TopicNameInvalid,
-    PacketIdentifierInUse,
-    QuotaExceeded,
-    PayloadFormatInvalid,
-}
-
-/// Acknowledgement to QoS1 publish
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PubRec {
-    pub pkid: u16,
-    pub reason: PubRecReason,
-}
-
-impl PubRec {
-    pub fn new(pkid: u16) -> Self {
-        Self {
-            pkid,
-            reason: PubRecReason::Success,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PubRecProperties {
-    pub reason_string: Option<String>,
-    pub user_properties: Vec<(String, String)>,
-}
-
 //------------------------------------------------------------------------
 
 //--------------------------- PubComp packet -------------------------------
 
-/// Return code in connack
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
-pub enum PubCompReason {
-    Success,
-    PacketIdentifierNotFound,
-}
-
-/// QoS2 Assured publish complete, in response to PUBREL packet
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PubComp {
-    pub pkid: u16,
-    pub reason: PubCompReason,
-}
-
-impl PubComp {
-    pub fn new(pkid: u16) -> Self {
-        Self {
-            pkid,
-            reason: PubCompReason::Success,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PubCompProperties {
-    pub reason_string: Option<String>,
-    pub user_properties: Vec<(String, String)>,
-}
-
 //------------------------------------------------------------------------
 
 //--------------------------- PubRel packet -------------------------------
-
-/// Return code in connack
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
-pub enum PubRelReason {
-    Success,
-    PacketIdentifierNotFound,
-}
-
-/// QoS2 Publish release, in response to PUBREC packet
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PubRel {
-    pub pkid: u16,
-    pub reason: PubRelReason,
-}
-
-impl PubRel {
-    pub fn new(pkid: u16) -> Self {
-        Self {
-            pkid,
-            reason: PubRelReason::Success,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PubRelProperties {
-    pub reason_string: Option<String>,
-    pub user_properties: Vec<(String, String)>,
-}
 
 //------------------------------------------------------------------------
 

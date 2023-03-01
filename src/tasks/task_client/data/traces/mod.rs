@@ -5,6 +5,7 @@ use std::mem::MaybeUninit;
 use crate::tasks::HubError;
 use crate::v3_1_1::SubscribeFilter;
 
+use crate::protocol::Protocol;
 use anyhow::Result;
 use bytes::Bytes;
 use log::debug;
@@ -15,6 +16,7 @@ type SharedRb = ringbuf::SharedRb<u16, Vec<MaybeUninit<u16>>>;
 
 #[derive(Debug, Clone)]
 pub struct TracePublishQos<T> {
+    pub(crate) protocol: Protocol,
     pub(crate) id: u32,
     pub topic: Arc<String>,
     pub packet_id: u16,
@@ -80,7 +82,7 @@ pub struct TracePublishQos<T> {
 // }
 
 impl<T> TracePublishQos<T> {
-    pub fn init(topic: Arc<String>, payload: Arc<Bytes>, retain: bool) -> Self {
+    pub fn init(topic: Arc<String>, payload: Arc<Bytes>, retain: bool, protocol: Protocol) -> Self {
         Self {
             id: Id::id(),
             packet_id: 0,
@@ -88,6 +90,7 @@ impl<T> TracePublishQos<T> {
             qos: PhantomData,
             payload,
             retain,
+            protocol,
         }
     }
     pub fn id(&self) -> u32 {

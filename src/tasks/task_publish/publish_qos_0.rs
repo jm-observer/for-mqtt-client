@@ -1,7 +1,7 @@
+use crate::protocol::packet::publish::Publish;
 use crate::tasks::task_client::data::TracePublishQos;
 use crate::tasks::utils::CommonErr;
 use crate::tasks::Senders;
-use crate::v3_1_1::Publish;
 use crate::{AtMostOnce, QoSWithPacketId};
 use bytes::BytesMut;
 use log::debug;
@@ -31,6 +31,7 @@ impl TaskPublishQos0 {
             QoSWithPacketId::AtMostOnce,
             self.trace_publish.payload.clone(),
             self.trace_publish.retain,
+            self.trace_publish.protocol,
         );
         let mut bytes = BytesMut::new();
         packet.write(&mut bytes);

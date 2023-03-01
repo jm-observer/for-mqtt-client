@@ -1,8 +1,7 @@
-use crate::v3_1_1::Publish;
-
 use std::default::Default;
 use std::sync::atomic::{AtomicU32, Ordering};
 
+use crate::protocol::packet::publish::Publish;
 use tokio::sync::{broadcast, mpsc};
 
 #[derive(Debug)]

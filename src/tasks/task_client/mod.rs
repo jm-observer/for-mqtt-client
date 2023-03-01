@@ -1,5 +1,6 @@
 use crate::tasks::task_client::data::{TraceSubscribe, TraceUnubscribe};
 
+use crate::protocol::Protocol;
 use crate::v3_1_1::SubscribeFilter;
 use crate::{ClientCommand, ClientData, ClientErr, QoS};
 use bytes::Bytes;
@@ -12,6 +13,7 @@ pub mod data;
 
 #[derive(Clone)]
 pub struct Client {
+    pub(crate) protocol: Protocol,
     tx_client_command: mpsc::Sender<ClientCommand>,
     tx_client_data: mpsc::Sender<ClientData>,
     tx_to_client: Sender<MqttEvent>,
@@ -22,11 +24,13 @@ impl Client {
         tx_client_data: mpsc::Sender<ClientData>,
         tx_client_command: mpsc::Sender<ClientCommand>,
         tx_to_client: Sender<MqttEvent>,
+        protocol: Protocol,
     ) -> Self {
         Self {
             tx_client_command,
             tx_to_client,
             tx_client_data,
+            protocol,
         }
     }
     pub async fn publish<T: Into<Arc<String>>, D: Into<Bytes>>(
@@ -41,7 +45,7 @@ impl Client {
         if payload.len() + 4 + topic.len() > 268_435_455 {
             return Err(ClientErr::PayloadTooLong);
         };
-        let trace_publish = ClientData::publish(topic, qos, payload.into(), retain);
+        let trace_publish = ClientData::publish(topic, qos, payload.into(), retain, self.protocol);
         let id = trace_publish.id();
         self.tx_client_data.send(trace_publish).await?;
         Ok(id)
@@ -57,7 +61,7 @@ impl Client {
         if payload.len() + 4 + topic.len() > 268_435_455 {
             return Err(ClientErr::PayloadTooLong);
         };
-        let trace_publish = ClientData::publish(topic, qos, payload, retain);
+        let trace_publish = ClientData::publish(topic, qos, payload, retain, self.protocol);
         let id = trace_publish.id();
         self.tx_client_data.send(trace_publish).await?;
         Ok(id)

@@ -1,4 +1,5 @@
-use crate::v3_1_1::{PubRec, PubRel, Publish, Subscribe, Unsubscribe};
+use crate::protocol::packet::publish::Publish;
+use crate::v3_1_1::{Subscribe, Unsubscribe};
 use bytes::{Bytes, BytesMut};
 use std::sync::Arc;
 

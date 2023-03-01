@@ -5,7 +5,6 @@ pub use unacknowledged::*;
 
 use crate::tasks::task_network::{HubNetworkCommand, NetworkEvent, TaskNetwork};
 use crate::tasks::Senders;
-use crate::v3_1_1::Publish;
 use anyhow::Result;
 use log::{debug, error, info, warn};
 use ringbuf::{Consumer, Producer};
@@ -19,6 +18,7 @@ use tokio::sync::mpsc::error::TryRecvError;
 use tokio::time::sleep;
 use tokio::{select, spawn};
 
+use crate::protocol::packet::publish::Publish;
 use crate::protocol::packet::Connect;
 use crate::protocol::MqttOptions;
 use crate::tasks::task_client::data::MqttEvent;
@@ -48,7 +48,12 @@ impl TaskHub {
         let (tx_client_data, rx_client_data) = mpsc::channel(1024);
         let (tx_client_command, rx_client_command) = mpsc::channel(1024);
         let (tx_to_user, _) = channel(1024);
-        let client = Client::init(tx_client_data, tx_client_command, tx_to_user.clone());
+        let client = Client::init(
+            tx_client_data,
+            tx_client_command,
+            tx_to_user.clone(),
+            options.protocol,
+        );
         let mut hub = Self {
             options,
             state: HubState::default(),
@@ -291,7 +296,7 @@ impl TaskHub {
                     } else {
                         self.rx_publish.insert(id, publish);
                         self.rx_publish_id.insert(id, id);
-                        TaskPublishRxQos1::init(senders.clone(), id);
+                        TaskPublishRxQos1::init(senders.clone(), id, self.options.protocol);
                     }
                 }
                 QoSWithPacketId::ExactlyOnce(id) => {

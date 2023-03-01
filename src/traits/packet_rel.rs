@@ -1,4 +1,5 @@
-use crate::v3_1_1::{PubAck, PubComp, PubRec, PubRel, SubAck, UnsubAck};
+use crate::protocol::packet::puback::PubAck;
+use crate::v3_1_1::{SubAck, UnsubAck};
 use std::fmt::Debug;
 
 pub trait PacketRel: Clone + Debug {

@@ -1,8 +1,8 @@
+use crate::protocol::packet::publish::Publish;
 use crate::tasks::task_client::data::TracePublishQos;
 use crate::tasks::task_hub::HubMsg;
 use crate::tasks::utils::{complete_to_tx_packet, CommonErr};
 use crate::tasks::{Senders, TIMEOUT_TO_COMPLETE_TX};
-use crate::v3_1_1::{Publish};
 use crate::{ExactlyOnce, QoSWithPacketId};
 use anyhow::Result;
 use log::debug;
@@ -32,6 +32,7 @@ impl TaskPublishQos2 {
             QoSWithPacketId::ExactlyOnce(self.trace_publish.packet_id),
             self.trace_publish.payload.clone(),
             self.trace_publish.retain,
+            self.trace_publish.protocol,
         );
         let mut rx_ack = self.tx.broadcast_tx.tx_pub_rec.subscribe();
         complete_to_tx_packet(

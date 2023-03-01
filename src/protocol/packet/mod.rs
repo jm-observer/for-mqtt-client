@@ -1,21 +1,66 @@
 pub(crate) mod connack;
 pub(crate) mod connect;
 pub(crate) mod puback;
+pub(crate) mod pubcomp;
 pub(crate) mod publish;
+pub(crate) mod pubrec;
+pub(crate) mod pubrel;
 
+use crate::protocol::packet::puback::PubAck;
+use crate::protocol::packet::publish::Publish;
 use crate::protocol::{FixedHeader, PacketParseError, PacketType, Protocol};
 use crate::v3_1_1::{
-    FixedHeaderError, Packet, PubAck, PubComp, PubRec, PubRel, Publish, SubAck, UnsubAck,
+    Disconnect, FixedHeaderError, PingReq, PingResp, SubAck, Subscribe, UnsubAck, Unsubscribe,
 };
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 pub use connack::*;
 pub use connect::*;
+use log::error;
 use std::slice::Iter;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Packet {
+    Connect(Connect),
+    ConnAck(ConnAck),
+    Publish(Publish),
+    PubAck(PubAck),
+    // PingReq(PingReq),
+    // PingResp(PingResp),
+    Subscribe(Subscribe),
+    SubAck(SubAck),
+    PubRec(PubRec),
+    PubRel(PubRel),
+    PubComp(PubComp),
+    Unsubscribe(Unsubscribe),
+    UnsubAck(UnsubAck),
+    // Disconnect(Disconnect),
+}
+
+impl Packet {
+    pub fn packet_ty(&self) -> PacketType {
+        match self {
+            Packet::ConnAck(_) => PacketType::ConnAck,
+            Packet::Publish(_) => PacketType::Publish,
+            Packet::PubAck(_) => PacketType::PubAck,
+            Packet::PubRec(_) => PacketType::PubRec,
+            Packet::PubRel(_) => PacketType::PubRel,
+            Packet::PubComp(_) => PacketType::PubComp,
+            Packet::SubAck(_) => PacketType::SubAck,
+            Packet::UnsubAck(_) => PacketType::UnsubAck,
+            // Packet::PingResp(_) => PacketType::PingResp,
+            Packet::Connect(_) => PacketType::Connect,
+            // Packet::PingReq(_) => PacketType::PingReq,
+            Packet::Subscribe(_) => PacketType::Subscribe,
+            Packet::Unsubscribe(_) => PacketType::Unsubscribe,
+            // Packet::Disconnect(_) => PacketType::Disconnect,
+        }
+    }
+}
 
 /// 解析包。数据截断、丢弃等逻辑：done
 pub fn read_from_network(
     stream: &mut BytesMut,
-    version: &Protocol,
+    version: Protocol,
 ) -> Result<Packet, PacketParseError> {
     let fixed_header = match parse_fixed_header(stream.iter()) {
         Ok(fixed_header) => fixed_header,
@@ -32,21 +77,24 @@ pub fn read_from_network(
     let packet = packet.freeze();
     let packet = match packet_type {
         PacketType::ConnAck => Packet::ConnAck(ConnAck::read(fixed_header, packet, version)?),
-        PacketType::Publish => Packet::Publish(Publish::read(fixed_header, packet)?),
-        PacketType::PubAck => Packet::PubAck(PubAck::read(fixed_header, packet)?),
+        PacketType::Publish => Packet::Publish(Publish::read(fixed_header, packet, version)?),
+        PacketType::PubAck => Packet::PubAck(PubAck::read(fixed_header, packet, version)?),
         PacketType::PubRec => Packet::PubRec(PubRec::read(fixed_header, packet)?),
         PacketType::PubRel => Packet::PubRel(PubRel::read(fixed_header, packet)?),
         PacketType::PubComp => Packet::PubComp(PubComp::read(fixed_header, packet)?),
         PacketType::SubAck => Packet::SubAck(SubAck::read(fixed_header, packet)?),
         PacketType::UnsubAck => Packet::UnsubAck(UnsubAck::read(fixed_header, packet)?),
-        PacketType::PingResp => Packet::PingResp,
+        // PacketType::PingResp => Packet::PingResp,
         PacketType::Disconnect => match version {
             Protocol::V4 => return Err(PacketParseError::InvalidPacketType(packet_type as u8)),
             Protocol::V5 => {
                 todo!()
             }
         },
-        _ => return Err(PacketParseError::InvalidPacketType(packet_type as u8)),
+        ty => {
+            error!("{:?}", ty);
+            return Err(PacketParseError::InvalidPacketType(packet_type as u8));
+        }
     };
     Ok(packet)
 }
