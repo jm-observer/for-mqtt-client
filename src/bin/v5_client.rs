@@ -70,12 +70,34 @@ async fn main() -> Result<()> {
     //         .await
     // );
     // sleep(Duration::from_secs(2)).await;
+    // info!(
+    //     "{:?}",
+    //     _client
+    //         .publish(
+    //             "abcfew".to_string(),
+    //             QoS::AtMostOnce,
+    //             "abc".as_bytes(),
+    //             false
+    //         )
+    //         .await?
+    // );
+    // info!(
+    //     "{:?}",
+    //     _client
+    //         .publish(
+    //             "abcfew".to_string(),
+    //             QoS::AtLeastOnce,
+    //             "abc".as_bytes(),
+    //             false
+    //         )
+    //         .await?
+    // );
     info!(
         "{:?}",
         _client
             .publish(
                 "abcfew".to_string(),
-                QoS::AtMostOnce,
+                QoS::ExactlyOnce,
                 "abc".as_bytes(),
                 false
             )

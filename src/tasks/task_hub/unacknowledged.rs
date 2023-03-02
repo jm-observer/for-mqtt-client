@@ -1,3 +1,4 @@
+use crate::protocol::Protocol;
 use crate::tasks::task_publish::{TaskPublishQos1, TaskPublishQos2, TaskPublishQos2Rel};
 use crate::tasks::task_subscribe::TaskUnsubscribe;
 use crate::tasks::{Senders, TaskSubscribe};
@@ -8,7 +9,7 @@ pub enum UnacknowledgedClientData {
     PublishQoS1(TracePublishQos<AtLeastOnce>),
     PublishQoS2(TracePublishQos<ExactlyOnce>),
     /// packet_id, trace_id
-    PubRel(u16, u32),
+    PubRel(u16, u32, Protocol),
     Subscribe(TraceSubscribe),
     Unsubscribe(TraceUnubscribe),
 }
@@ -16,7 +17,7 @@ pub enum UnacknowledgedClientData {
 impl UnacknowledgedClientData {
     pub fn packet_id(&self) -> u16 {
         match self {
-            UnacknowledgedClientData::PubRel(packet_id, _) => *packet_id,
+            UnacknowledgedClientData::PubRel(packet_id, ..) => *packet_id,
             UnacknowledgedClientData::Subscribe(packet) => packet.packet_id(),
             UnacknowledgedClientData::Unsubscribe(packet) => packet.packet_id(),
             UnacknowledgedClientData::PublishQoS1(packet) => packet.packet_id(),
@@ -30,11 +31,15 @@ impl UnacknowledgedClientData {
             UnacknowledgedClientData::PublishQoS2(packet) => {
                 let _ = mem::replace(
                     self,
-                    UnacknowledgedClientData::PubRel(packet.packet_id(), packet.id()),
+                    UnacknowledgedClientData::PubRel(
+                        packet.packet_id(),
+                        packet.id(),
+                        packet.protocol,
+                    ),
                 );
                 false
             }
-            UnacknowledgedClientData::PubRel(_, _)
+            UnacknowledgedClientData::PubRel(..)
             | UnacknowledgedClientData::Subscribe(_)
             | UnacknowledgedClientData::Unsubscribe(_)
             | UnacknowledgedClientData::PublishQoS1(_) => true,
@@ -49,8 +54,8 @@ impl UnacknowledgedClientData {
             UnacknowledgedClientData::PublishQoS2(packet) => {
                 TaskPublishQos2::init(senders.clone(), packet.clone()).await;
             }
-            UnacknowledgedClientData::PubRel(packet_id, id) => {
-                TaskPublishQos2Rel::init(senders.clone(), *packet_id, *id).await
+            UnacknowledgedClientData::PubRel(packet_id, id, protocol) => {
+                TaskPublishQos2Rel::init(senders.clone(), *packet_id, *id, *protocol).await
             }
             UnacknowledgedClientData::Subscribe(packet) => {
                 TaskSubscribe::init(senders.clone(), packet.clone());

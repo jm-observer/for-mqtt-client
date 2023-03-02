@@ -1,4 +1,5 @@
 use crate::protocol::packet::publish::Publish;
+use crate::protocol::packet::{PubRec, PubRel};
 use crate::v3_1_1::{Subscribe, Unsubscribe};
 use bytes::{Bytes, BytesMut};
 use std::sync::Arc;
@@ -30,7 +31,7 @@ impl PacketDup for PubRel {
     }
 
     fn dup_data(&mut self) -> Arc<Bytes> {
-        Arc::new(self.data())
+        self.data()
     }
 }
 impl PacketDup for PubRec {
@@ -41,7 +42,7 @@ impl PacketDup for PubRec {
     }
 
     fn dup_data(&mut self) -> Arc<Bytes> {
-        Arc::new(self.data())
+        self.data()
     }
 }
 

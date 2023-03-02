@@ -303,9 +303,9 @@ impl TaskHub {
                     if self.rx_publish_id.contains_key(&id) {
                         debug!("rx dup publish {:?} from broker", publish)
                     } else {
+                        TaskPublishRxQos2::init(senders.clone(), id, publish.protocol);
                         self.rx_publish.insert(id, publish);
                         self.rx_publish_id.insert(id, id);
-                        TaskPublishRxQos2::init(senders.clone(), id);
                     }
                 }
             },

@@ -29,8 +29,8 @@ impl TaskPublishRxQos1 {
         });
     }
     async fn run(&mut self) -> Result<(), CommonErr> {
-        let data = PubAck::data(self.packet_id, self.protocol);
-        self.tx.tx_network_default(data).await?;
+        let data = PubAck::new(self.packet_id, self.protocol);
+        self.tx.tx_network_default(data.data()).await?;
         self.tx
             .tx_hub_msg
             .send(HubMsg::AffirmRxPublish(self.packet_id))

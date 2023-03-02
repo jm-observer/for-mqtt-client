@@ -8,24 +8,24 @@ pub trait PacketRel: Clone + Debug {
 
 impl PacketRel for PubAck {
     fn is_rel(&self, packet_id: u16) -> bool {
-        self.packet_id == packet_id
+        self.packet_id() == packet_id
     }
 }
 
 impl PacketRel for PubRel {
     fn is_rel(&self, packet_id: u16) -> bool {
-        self.packet_id == packet_id
+        self.packet_id() == packet_id
     }
 }
 
 impl PacketRel for PubRec {
     fn is_rel(&self, packet_id: u16) -> bool {
-        self.packet_id == packet_id
+        self.packet_id() == packet_id
     }
 }
 impl PacketRel for PubComp {
     fn is_rel(&self, packet_id: u16) -> bool {
-        self.packet_id == packet_id
+        self.packet_id() == packet_id
     }
 }
 impl PacketRel for SubAck {

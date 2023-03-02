@@ -2,6 +2,7 @@ use super::*;
 use crate::protocol::len_len;
 use anyhow::{bail, Result};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
+use std::sync::Arc;
 
 impl Default for PubRecReason {
     fn default() -> Self {
@@ -55,6 +56,14 @@ impl<Ty: Common> PubCommon<Ty> {
         }
     }
 
+    pub fn packet_id(&self) -> u16 {
+        match self {
+            PubCommon::V4 { packet_id, .. } => *packet_id,
+            PubCommon::V5 { packet_id, .. } => *packet_id,
+            PubCommon::V5WriteMode { packet_id, .. } => *packet_id,
+        }
+    }
+
     pub fn set_reason_string(&mut self, reason_string: String) -> Result<()> {
         match self {
             PubCommon::V4 { .. } => {
@@ -64,11 +73,9 @@ impl<Ty: Common> PubCommon<Ty> {
                 bail!("todo")
             }
             PubCommon::V5WriteMode {
-                packet_id,
-                reason,
                 had_reason_string,
-                had_user_properties,
                 properties,
+                ..
             } => {
                 if *had_reason_string == true {
                     bail!("todo");
@@ -191,14 +198,18 @@ impl<Ty: Common> PubCommon<Ty> {
             user_properties,
         }))
     }
-
-    pub fn write(&self, buffer: &mut BytesMut) -> Result<usize, PacketParseError> {
+    pub fn data(&self) -> Arc<Bytes> {
+        let mut buffer = BytesMut::new();
+        self.write(&mut buffer);
+        Arc::new(buffer.freeze())
+    }
+    pub fn write(&self, buffer: &mut BytesMut) -> usize {
         match self {
             PubCommon::V4 { packet_id } => {
-                buffer.put_u8(0x50);
-                let count = write_remaining_length(buffer, 2);
+                buffer.put_u8(Ty::ty());
+                write_remaining_length(buffer, 2);
                 buffer.put_u16(*packet_id);
-                Ok(4)
+                4
             }
             PubCommon::V5 { .. } => {
                 unreachable!()
@@ -206,24 +217,20 @@ impl<Ty: Common> PubCommon<Ty> {
             PubCommon::V5WriteMode {
                 packet_id,
                 reason,
-                had_reason_string,
-                had_user_properties,
                 properties,
+                ..
             } => {
                 let len = self.len();
-                buffer.put_u8(0x50);
+                buffer.put_u8(Ty::ty());
                 let count = write_remaining_length(buffer, len);
 
                 buffer.put_u16(*packet_id);
                 if len == 2 {
-                    return Ok(4);
-                }
-                if len == 2 {
-                    return Ok(4);
+                    return 4;
                 }
                 buffer.put_u8(reason.as_u8());
                 write_mqtt_bytes(buffer, properties.as_ref());
-                Ok(len + 1 + count)
+                len + 1 + count
             }
         }
     }
@@ -271,15 +278,16 @@ enum PropertyType {
     UserProperty = 38,
 }
 
-trait Common {
+pub trait Common {
     type Reason: Default + Reason;
     fn reason(num: u8) -> Result<Self::Reason, PacketParseError>;
+    fn ty() -> u8;
 }
-trait Reason {
+pub trait Reason {
     fn is_success(&self) -> bool;
     fn as_u8(&self) -> u8;
 }
-
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PubRecTy;
 
 /// Return code in connack
@@ -325,8 +333,12 @@ impl Common for PubRecTy {
 
         Ok(code)
     }
-}
 
+    fn ty() -> u8 {
+        0x50
+    }
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PubRelTy;
 
 /// Return code in connack
@@ -345,6 +357,12 @@ impl Reason for PubRelReason {
     }
 }
 
+impl Default for PubRelReason {
+    fn default() -> Self {
+        Self::Success
+    }
+}
+
 impl Common for PubRelTy {
     type Reason = PubRelReason;
 
@@ -356,8 +374,11 @@ impl Common for PubRelTy {
         };
         Ok(code)
     }
+    fn ty() -> u8 {
+        0x62
+    }
 }
-
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PubCompTy;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -374,7 +395,11 @@ impl Reason for PubCompReason {
         (*self) as u8
     }
 }
-
+impl Default for PubCompReason {
+    fn default() -> Self {
+        Self::Success
+    }
+}
 impl Common for PubCompTy {
     type Reason = PubCompReason;
 
@@ -385,6 +410,9 @@ impl Common for PubCompTy {
             num => return Err(PacketParseError::InvalidConnectReturnCode(num)),
         };
         Ok(code)
+    }
+    fn ty() -> u8 {
+        0x70
     }
 }
 
@@ -401,6 +429,7 @@ pub enum PubAckReason {
     PayloadFormatInvalid,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PubAckTy;
 
 impl Reason for PubAckReason {
@@ -411,7 +440,11 @@ impl Reason for PubAckReason {
         (*self) as u8
     }
 }
-
+impl Default for PubAckReason {
+    fn default() -> Self {
+        Self::Success
+    }
+}
 impl Common for PubAckTy {
     type Reason = PubAckReason;
 
@@ -429,5 +462,9 @@ impl Common for PubAckTy {
             num => return Err(PacketParseError::InvalidConnectReturnCode(num)),
         };
         Ok(code)
+    }
+
+    fn ty() -> u8 {
+        0x40
     }
 }
