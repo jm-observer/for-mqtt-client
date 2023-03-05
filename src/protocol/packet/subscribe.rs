@@ -1,5 +1,5 @@
 use crate::protocol::len_len;
-use crate::protocol::packet::{write_mqtt_bytes, write_remaining_length};
+use crate::protocol::packet::write_remaining_length;
 use bytes::{BufMut, Bytes, BytesMut};
 
 /// Subscription packet
@@ -39,12 +39,9 @@ impl Subscribe {
                 buffer.put_u8(0x82);
                 let remaining_len = filters.len() + 2;
                 let remaining_len_bytes = write_remaining_length(buffer, remaining_len);
-
                 // write packet id
                 buffer.put_u16(*packet_id);
-
-                write_mqtt_bytes(buffer, filters.as_ref());
-
+                buffer.extend_from_slice(filters.as_ref());
                 1 + remaining_len_bytes + remaining_len
             }
             Self::V5 {

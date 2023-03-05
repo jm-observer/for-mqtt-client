@@ -2,8 +2,8 @@
 
 use anyhow::Result;
 use for_mqtt_client::protocol::MqttOptions;
-use for_mqtt_client::MqttEvent;
 use for_mqtt_client::QoS;
+use for_mqtt_client::{MqttEvent, ProtocolV4};
 use log::LevelFilter::{Debug, Info};
 use log::{debug, error, info, warn};
 use std::io::Read;
@@ -19,11 +19,12 @@ async fn main() -> Result<()> {
         .build_default()
         .log_to_stdout()
         .start();
-    let mut options = MqttOptions::new_v4("abc111".to_string(), "broker.emqx.io".to_string(), 1883);
+    let mut options =
+        MqttOptions::new_v4("abc111sfew".to_string(), "broker.emqx.io".to_string(), 1883);
     options.set_keep_alive(30);
     options.auto_reconnect();
 
-    let _client = options.connect().await;
+    let _client = options.connect::<ProtocolV4>().await;
     let mut event_rx = _client.init_receiver();
     spawn(async move {
         while let Ok(event) = event_rx.recv().await {
@@ -54,22 +55,22 @@ async fn main() -> Result<()> {
     println!(
         "{:?}",
         _client
-            .subscribe("abcfew".to_string(), QoS::ExactlyOnce)
+            .to_subscribe("abcfew".to_string(), QoS::ExactlyOnce)
             .await
     );
     println!(
         "{:?}",
         _client
-            .subscribe("abcfewfe".to_string(), QoS::ExactlyOnce)
+            .to_subscribe("abcfewfe".to_string(), QoS::ExactlyOnce)
             .await
     );
     println!(
         "{:?}",
         _client
-            .subscribe("abcfewwewew".to_string(), QoS::ExactlyOnce)
+            .to_subscribe("abcfewwewew".to_string(), QoS::ExactlyOnce)
             .await
     );
-    sleep(Duration::from_secs(2)).await;
+    sleep(Duration::from_secs(12)).await;
     info!(
         "{:?}",
         _client

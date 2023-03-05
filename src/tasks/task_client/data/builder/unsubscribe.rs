@@ -1,7 +1,7 @@
 use crate::datas::id::Id;
 
 use crate::protocol::packet::unsubscribe::Unsubscribe;
-use crate::protocol::packet::{write_mqtt_bytes, write_mqtt_string};
+use crate::protocol::packet::write_mqtt_string;
 use crate::protocol::PropertyType;
 use crate::{Protocol, ProtocolV5, TraceUnubscribe};
 
@@ -11,12 +11,12 @@ use std::marker::PhantomData;
 pub struct UnsubscribeBuilder<T: Protocol> {
     pub trace_id: Id,
     pub user_properties: Vec<(String, String)>,
-    pub filters: Vec<FilterBuilder<T>>,
+    pub filters: Vec<UnsubscribeFilterBuilder<T>>,
 }
 
 impl<T: Protocol> UnsubscribeBuilder<T> {
-    pub fn add_filter(&mut self, path: String) -> &mut FilterBuilder<T> {
-        self.filters.push(FilterBuilder::new(path));
+    pub fn add_filter(&mut self, path: String) -> &mut UnsubscribeFilterBuilder<T> {
+        self.filters.push(UnsubscribeFilterBuilder::new(path));
         let index = self.filters.len() - 1;
         unsafe { self.filters.get_unchecked_mut(index) }
     }
@@ -28,12 +28,12 @@ impl UnsubscribeBuilder<ProtocolV5> {
     }
 }
 
-pub struct FilterBuilder<T: Protocol> {
+pub struct UnsubscribeFilterBuilder<T: Protocol> {
     path: String,
     protocol: PhantomData<T>,
 }
 
-impl<T: Protocol> FilterBuilder<T> {
+impl<T: Protocol> UnsubscribeFilterBuilder<T> {
     pub fn new(path: String) -> Self {
         Self {
             path,
@@ -73,12 +73,9 @@ impl<T: Protocol> From<UnsubscribeBuilder<T>> for TraceUnubscribe {
                 write_filter(filter, &mut buffer)
             }
             let properties_datas = write_properties(user_properties);
-            let mut buffer_properties = BytesMut::with_capacity(properties_datas.len() + 2);
-            buffer_properties.put_u16(properties_datas.len() as u16);
-            write_mqtt_bytes(&mut buffer_properties, properties_datas.as_ref());
             Unsubscribe::V5 {
                 packet_id: 0,
-                properties: buffer_properties.freeze(),
+                properties: properties_datas,
                 filters: buffer.freeze(),
             }
         };
@@ -97,7 +94,7 @@ fn write_properties(user_properties: Vec<(String, String)>) -> Bytes {
     }
     buffer.freeze()
 }
-fn write_filter<T: Protocol>(value: FilterBuilder<T>, buffer: &mut BytesMut) {
-    let FilterBuilder { path, .. } = value;
+fn write_filter<T: Protocol>(value: UnsubscribeFilterBuilder<T>, buffer: &mut BytesMut) {
+    let UnsubscribeFilterBuilder { path, .. } = value;
     write_mqtt_string(buffer, path.as_str());
 }

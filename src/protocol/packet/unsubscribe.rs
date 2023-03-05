@@ -1,4 +1,5 @@
-use crate::protocol::packet::{write_mqtt_bytes, write_remaining_length};
+use crate::protocol::len_len;
+use crate::protocol::packet::write_remaining_length;
 use bytes::{BufMut, Bytes, BytesMut};
 
 /// Subscription packet
@@ -35,20 +36,32 @@ impl Unsubscribe {
                 payload: filters,
             } => {
                 // write packet type
-                buffer.put_u8(0x82);
+                buffer.put_u8(0xa2);
                 // write remaining length
                 let remaining_len = filters.len() + 2;
                 let remaining_len_bytes = write_remaining_length(buffer, remaining_len);
-
                 // write packet id
                 buffer.put_u16(*packet_id);
-
-                write_mqtt_bytes(buffer, filters.as_ref());
-
+                buffer.extend_from_slice(filters.as_ref());
                 1 + remaining_len_bytes + remaining_len
             }
-            Self::V5 { .. } => {
-                todo!()
+            Self::V5 {
+                packet_id,
+                properties,
+                filters,
+            } => {
+                buffer.put_u8(0xa2);
+                let properties_len = len_len(properties.len());
+                let remaining_len = 2 + properties_len + properties.len() + filters.len();
+                let remaining_len_bytes = write_remaining_length(buffer, remaining_len);
+
+                buffer.put_u16(*packet_id);
+                let _properties_len_bytes = write_remaining_length(buffer, properties.len());
+                if properties.len() > 0 {
+                    buffer.extend_from_slice(properties.as_ref())
+                }
+                buffer.extend_from_slice(filters.as_ref());
+                1 + remaining_len + remaining_len_bytes
             }
         }
     }

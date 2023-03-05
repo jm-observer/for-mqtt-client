@@ -8,6 +8,7 @@ use crate::{Protocol, ProtocolV5, QoS, TraceSubscribe};
 use anyhow::bail;
 use bytes::{BufMut, Bytes, BytesMut};
 use std::marker::PhantomData;
+pub use unsubscribe::*;
 
 pub struct SubscribeBuilder<T: Protocol> {
     pub trace_id: Id,

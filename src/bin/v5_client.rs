@@ -103,17 +103,17 @@ async fn main() -> Result<()> {
     //         )
     //         .await?
     // );
-    // info!(
-    //     "{:?}",
-    //     _client
-    //         .publish(
-    //             "abcfew".to_string(),
-    //             QoS::ExactlyOnce,
-    //             "abc".as_bytes(),
-    //             false
-    //         )
-    //         .await?
-    // );
+    info!(
+        "{:?}",
+        _client
+            .publish(
+                "abcfew".to_string(),
+                QoS::ExactlyOnce,
+                "abc".as_bytes(),
+                false
+            )
+            .await?
+    );
     // info!(
     //     "{:?}",
     //     _client
@@ -126,7 +126,7 @@ async fn main() -> Result<()> {
     //         .await?
     // );
     // sleep(Duration::from_secs(2)).await;
-    // _client.unsubscribe("abcfew".to_string()).await?;
+    _client.unsubscribe("abcfew".to_string()).await?;
     // sleep(Duration::from_secs(20)).await;
     // info!(
     //     "{:?}",
