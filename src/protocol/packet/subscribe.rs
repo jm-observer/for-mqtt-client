@@ -1,3 +1,4 @@
+use crate::protocol::len_len;
 use crate::protocol::packet::{write_mqtt_bytes, write_remaining_length};
 use bytes::{BufMut, Bytes, BytesMut};
 
@@ -52,14 +53,17 @@ impl Subscribe {
                 filters,
             } => {
                 buffer.put_u8(0x82);
-                let remaining_len = filters.len() + 2 + properties.len();
+                let properties_len = len_len(properties.len());
+                let remaining_len = 2 + properties_len + properties.len() + filters.len();
                 let remaining_len_bytes = write_remaining_length(buffer, remaining_len);
 
                 buffer.put_u16(*packet_id);
-                write_mqtt_bytes(buffer, properties.as_ref());
-                write_mqtt_bytes(buffer, filters.as_ref());
-
-                1 + remaining_len_bytes + remaining_len
+                let _properties_len_bytes = write_remaining_length(buffer, properties.len());
+                if properties.len() > 0 {
+                    buffer.extend_from_slice(properties.as_ref())
+                }
+                buffer.extend_from_slice(filters.as_ref());
+                1 + remaining_len + remaining_len_bytes
             }
         }
     }

@@ -117,18 +117,17 @@ impl<T: Protocol> From<SubscribeBuilder<T>> for TraceSubscribe {
             }
         } else {
             let mut buffer = BytesMut::new();
-            buffer.put_u16(filters.len() as u16);
             for filter in filters {
                 write_filter(filter, &mut buffer)
             }
 
             let properties_datas = write_properties(id, user_properties);
-            let mut buffer_properties = BytesMut::with_capacity(properties_datas.len() + 2);
-            buffer_properties.put_u16(properties_datas.len() as u16);
-            write_mqtt_bytes(&mut buffer_properties, properties_datas.as_ref());
+            // let mut buffer_properties = BytesMut::with_capacity(properties_datas.len() + 2);
+            // buffer_properties.put_u16(properties_datas.len() as u16);
+            // write_mqtt_bytes(&mut buffer_properties, properties_datas.as_ref());
             Subscribe::V5 {
                 packet_id: 0,
-                properties: buffer_properties.freeze(),
+                properties: properties_datas,
                 filters: buffer.freeze(),
             }
         };

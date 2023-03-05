@@ -92,17 +92,17 @@ async fn main() -> Result<()> {
     //         )
     //         .await?
     // );
-    info!(
-        "{:?}",
-        _client
-            .publish(
-                "abcfew".to_string(),
-                QoS::ExactlyOnce,
-                "abc".as_bytes(),
-                false
-            )
-            .await?
-    );
+    // info!(
+    //     "{:?}",
+    //     _client
+    //         .publish(
+    //             "abcfew".to_string(),
+    //             QoS::ExactlyOnce,
+    //             "abc".as_bytes(),
+    //             false
+    //         )
+    //         .await?
+    // );
     // info!(
     //     "{:?}",
     //     _client
