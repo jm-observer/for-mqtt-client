@@ -12,10 +12,11 @@ mod data;
 
 use crate::tasks::task_hub::HubMsg;
 
+use crate::protocol::packet::disconnect::Disconnect;
+use crate::protocol::packet::ping::PingResp;
 use crate::protocol::packet::{read_from_network, ConnectReturnCode, Packet};
 use crate::protocol::Protocol;
 use crate::tasks::Senders;
-use crate::v3_1_1::Disconnect;
 pub use data::*;
 
 #[derive(Clone, Debug)]
@@ -135,7 +136,9 @@ impl TaskNetwork {
         &mut self,
         stream: &mut TcpStream,
     ) -> Result<(), NetworkTasksError> {
-        stream.write_all(Disconnect::data()).await?;
+        stream
+            .write_all(Disconnect::new(self.version).data().as_ref())
+            .await?;
         self.state = NetworkState::Disconnected;
         Ok(())
     }
@@ -229,11 +232,21 @@ impl TaskNetwork {
                                 error!("fail to send UnsubAck");
                                 return Err(NetworkTasksError::ChannelAbnormal);
                             }
-                        } // Packet::PingResp => {
-                        //     self.senders.broadcast_tx.tx_ping.send(PingResp)?;
-                        // }
-                        _ => {
-                            todo!()
+                        }
+                        Packet::PingResp => {
+                            self.senders.broadcast_tx.tx_ping.send(PingResp)?;
+                        }
+                        Packet::Disconnect(packet) => {
+                            self.senders
+                                .tx_hub_network_event
+                                .send(NetworkEvent::BrokerDisconnect(packet))
+                                .await?
+                        }
+                        // Packet::Connect(_) => {}
+                        // Packet::Subscribe(_) => {}
+                        // Packet::Unsubscribe(_) => {}
+                        packet => {
+                            error!("should not be rx: {:?}", packet);
                         }
                     };
                 }

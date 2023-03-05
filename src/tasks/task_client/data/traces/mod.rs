@@ -5,6 +5,7 @@ use std::mem::MaybeUninit;
 use crate::tasks::HubError;
 
 use crate::protocol::packet::subscribe::Subscribe;
+use crate::protocol::packet::unsubscribe::Unsubscribe;
 use crate::protocol::Protocol;
 use anyhow::Result;
 use bytes::Bytes;
@@ -143,26 +144,24 @@ impl TraceSubscribe {
 #[derive(Debug, Clone)]
 pub struct TraceUnubscribe {
     pub(crate) id: u32,
-    pub(crate) packet_id: u16,
-    pub topics: Vec<Arc<String>>,
+    pub(crate) unsubscribe: Unsubscribe,
 }
 impl TraceUnubscribe {
-    pub fn new(topics: Vec<Arc<String>>) -> Self {
+    pub fn new(unsubscribe: Unsubscribe) -> Self {
         Self {
             id: Id::id(),
-            packet_id: 0,
-            topics,
+            unsubscribe,
         }
     }
     pub(crate) async fn set_packet_id(
         &mut self,
         b: &mut Consumer<u16, Arc<SharedRb>>,
     ) -> Result<(), HubError> {
-        self.packet_id = request_id(b).await?;
+        self.unsubscribe.set_packet_id(request_id(b).await?);
         Ok(())
     }
     pub(crate) fn packet_id(&self) -> u16 {
-        self.packet_id
+        self.unsubscribe.packet_id()
     }
 }
 

@@ -6,7 +6,7 @@ mod willproperties;
 use crate::protocol::packet::{write_mqtt_string, write_remaining_length};
 use crate::protocol::{len_len, MqttOptions, PacketParseError, PropertyType, Protocol};
 use crate::{qos, QoS};
-use bytes::{Buf, BufMut, Bytes, BytesMut};
+use bytes::{BufMut, Bytes, BytesMut};
 use login::Login;
 use properties::ConnectProperties;
 use std::sync::Arc;

@@ -1,27 +1,26 @@
-use crate::tasks::task_client::data::TraceUnubscribe;
-
 use crate::protocol::packet::suback::SubscribeReasonCode;
-use std::sync::Arc;
+use crate::protocol::packet::unsuback::{UnsubAck, UnsubAckReason};
 
 #[derive(Debug, Clone)]
 pub struct SubscribeAck {
     pub id: u32,
-    pub filter_ack: Vec<SubscribeFilterAck>,
-}
-
-#[derive(Debug, Clone)]
-pub struct SubscribeFilterAck {
-    pub path: Arc<String>,
-    pub ack: SubscribeReasonCode,
+    pub acks: Vec<SubscribeReasonCode>,
 }
 
 #[derive(Debug, Clone)]
 pub struct UnsubscribeAck {
     pub id: u32,
+    pub acks: Vec<UnsubAckReason>,
 }
 
-impl From<TraceUnubscribe> for UnsubscribeAck {
-    fn from(val: TraceUnubscribe) -> Self {
-        Self { id: val.id }
+impl UnsubscribeAck {
+    pub fn init(ack: UnsubAck, id: u32) -> Self {
+        match ack {
+            UnsubAck::V4 { .. } => Self { id, acks: vec![] },
+            UnsubAck::V5ReadMode { return_codes, .. } => Self {
+                id,
+                acks: return_codes,
+            },
+        }
     }
 }

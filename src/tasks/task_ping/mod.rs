@@ -1,7 +1,7 @@
+use crate::protocol::packet::ping::PingReq;
 use crate::tasks::task_hub::HubMsg;
 use crate::tasks::utils::CommonErr;
 use crate::tasks::Senders;
-use crate::v3_1_1::PingReq;
 use log::debug;
 use std::sync::Arc;
 use std::time::Duration;

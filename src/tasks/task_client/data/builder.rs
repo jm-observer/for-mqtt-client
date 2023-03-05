@@ -1,3 +1,5 @@
+mod unsubscribe;
+
 use crate::datas::id::Id;
 use crate::protocol::packet::subscribe::{RetainForwardRule, Subscribe};
 use crate::protocol::packet::{write_mqtt_bytes, write_mqtt_string, write_remaining_length};
@@ -115,6 +117,7 @@ impl<T: Protocol> From<SubscribeBuilder<T>> for TraceSubscribe {
             }
         } else {
             let mut buffer = BytesMut::new();
+            buffer.put_u16(filters.len() as u16);
             for filter in filters {
                 write_filter(filter, &mut buffer)
             }
@@ -162,7 +165,7 @@ fn write_filter<T: Protocol>(value: FilterBuilder<T>, buffer: &mut BytesMut) {
             no_local,
             preserve_retain,
             retain_forward_rule,
-            protocol,
+            protocol: _,
         } = value;
         let mut options = qos as u8;
         if no_local {

@@ -4,8 +4,8 @@ pub mod protocol;
 mod tasks;
 pub mod traits;
 pub mod utils;
-pub mod v3_1_1;
-pub mod v5;
+// pub mod v3_1_1;
+// pub mod v5;
 
 use protocol::PacketParseError;
 pub use tasks::task_client::{data::*, Client};

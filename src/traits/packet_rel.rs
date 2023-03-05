@@ -1,6 +1,6 @@
 use crate::protocol::packet::suback::SubAck;
+use crate::protocol::packet::unsuback::UnsubAck;
 use crate::protocol::packet::{PubAck, PubComp, PubRec, PubRel};
-use crate::v3_1_1::UnsubAck;
 use std::fmt::Debug;
 
 pub trait PacketRel: Clone + Debug {
@@ -36,6 +36,6 @@ impl PacketRel for SubAck {
 }
 impl PacketRel for UnsubAck {
     fn is_rel(&self, packet_id: u16) -> bool {
-        self.packet_id == packet_id
+        self.packet_id() == packet_id
     }
 }

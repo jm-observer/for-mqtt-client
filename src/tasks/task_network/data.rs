@@ -5,6 +5,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 use tokio::io;
 
+use crate::protocol::packet::disconnect::Disconnect;
 use crate::protocol::packet::ConnectReturnFailCode;
 use crate::protocol::{PacketParseError, PacketType};
 use tokio::sync::{broadcast, mpsc};
@@ -43,6 +44,7 @@ pub enum NetworkEvent {
     ConnectFail(ToConnectError),
     /// 中间突然断开，network task发送后即drop
     ConnectedErr(String),
+    BrokerDisconnect(Disconnect),
 }
 
 #[derive(Debug)]

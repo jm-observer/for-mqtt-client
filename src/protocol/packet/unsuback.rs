@@ -1,28 +1,45 @@
 use crate::protocol::packet::{length, read_mqtt_string, read_u16, read_u8};
 use crate::protocol::{property, FixedHeader, PacketParseError, PropertyType, Protocol};
-use crate::QoS;
+
 use bytes::{Buf, Bytes};
 
 /// Acknowledgement to subscribe
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SubAck {
+pub enum UnsubAck {
     V4 {
         packet_id: u16,
-        return_codes: Vec<SubscribeReasonCode>,
     },
     V5ReadMode {
         packet_id: u16,
-        properties: Option<SubAckProperties>,
+        properties: Option<UnsubAckProperties>,
         /// payload
-        return_codes: Vec<SubscribeReasonCode>,
+        return_codes: Vec<UnsubAckReason>,
     },
 }
 
-impl SubAck {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum UnsubAckReason {
+    Success,
+    NoSubscriptionExisted,
+    UnspecifiedError,
+    ImplementationSpecificError,
+    NotAuthorized,
+    TopicFilterInvalid,
+    PacketIdentifierInUse,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnsubAckProperties {
+    pub reason_string: Option<String>,
+    pub user_properties: Vec<(String, String)>,
+}
+
+impl UnsubAck {
     pub fn packet_id(&self) -> u16 {
         match self {
-            SubAck::V4 { packet_id, .. } => *packet_id,
-            SubAck::V5ReadMode { packet_id, .. } => *packet_id,
+            UnsubAck::V4 { packet_id, .. } => *packet_id,
+            UnsubAck::V5ReadMode { packet_id, .. } => *packet_id,
         }
     }
     pub fn read(
@@ -35,28 +52,14 @@ impl SubAck {
                 let variable_header_index = fixed_header.fixed_header_len;
                 bytes.advance(variable_header_index);
                 let packet_id = read_u16(&mut bytes)?;
-
-                if !bytes.has_remaining() {
-                    return Err(PacketParseError::MalformedPacket);
-                }
-
-                let mut return_codes = Vec::new();
-                while bytes.has_remaining() {
-                    let return_code = read_u8(&mut bytes)?;
-                    return_codes.push(reason_for_v4(return_code)?);
-                }
-
-                SubAck::V4 {
-                    packet_id,
-                    return_codes,
-                }
+                UnsubAck::V4 { packet_id }
             }
             Protocol::V5 => {
                 let variable_header_index = fixed_header.fixed_header_len;
                 bytes.advance(variable_header_index);
 
                 let packet_id = read_u16(&mut bytes)?;
-                let properties = SubAckProperties::read(&mut bytes)?;
+                let properties = UnsubAckProperties::read(&mut bytes)?;
 
                 if !bytes.has_remaining() {
                     return Err(PacketParseError::MalformedPacket);
@@ -68,7 +71,7 @@ impl SubAck {
                     return_codes.push(reason_for_v5(return_code)?);
                 }
 
-                SubAck::V5ReadMode {
+                UnsubAck::V5ReadMode {
                     packet_id,
                     return_codes,
                     properties,
@@ -78,40 +81,9 @@ impl SubAck {
 
         Ok(suback)
     }
-
-    pub fn return_codes(self) -> Vec<SubscribeReasonCode> {
-        match self {
-            SubAck::V4 { return_codes, .. } => return_codes,
-            SubAck::V5ReadMode { return_codes, .. } => return_codes,
-        }
-    }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SubscribeReasonCode {
-    QoS0,
-    QoS1,
-    QoS2,
-    Success(QoS),
-    Failure,
-    Unspecified,
-    ImplementationSpecific,
-    NotAuthorized,
-    TopicFilterInvalid,
-    PkidInUse,
-    QuotaExceeded,
-    SharedSubscriptionsNotSupported,
-    SubscriptionIdNotSupported,
-    WildcardSubscriptionsNotSupported,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SubAckProperties {
-    pub reason_string: Option<String>,
-    pub user_properties: Vec<(String, String)>,
-}
-
-impl SubAckProperties {
+impl UnsubAckProperties {
     pub fn read(bytes: &mut Bytes) -> Result<Option<Self>, PacketParseError> {
         let mut reason_string = None;
         let mut user_properties = Vec::new();
@@ -144,38 +116,25 @@ impl SubAckProperties {
             }
         }
 
-        Ok(Some(SubAckProperties {
+        Ok(Some(UnsubAckProperties {
             reason_string,
             user_properties,
         }))
     }
 }
 
-fn reason_for_v5(code: u8) -> Result<SubscribeReasonCode, PacketParseError> {
-    let v = match code {
-        0 => SubscribeReasonCode::QoS0,
-        1 => SubscribeReasonCode::QoS1,
-        2 => SubscribeReasonCode::QoS2,
-        128 => SubscribeReasonCode::Unspecified,
-        131 => SubscribeReasonCode::ImplementationSpecific,
-        135 => SubscribeReasonCode::NotAuthorized,
-        143 => SubscribeReasonCode::TopicFilterInvalid,
-        145 => SubscribeReasonCode::PkidInUse,
-        151 => SubscribeReasonCode::QuotaExceeded,
-        158 => SubscribeReasonCode::SharedSubscriptionsNotSupported,
-        161 => SubscribeReasonCode::SubscriptionIdNotSupported,
-        162 => SubscribeReasonCode::WildcardSubscriptionsNotSupported,
-        v => return Err(PacketParseError::InvalidSubscribeReasonCode(v)),
+/// Connection return code type
+fn reason_for_v5(num: u8) -> Result<UnsubAckReason, PacketParseError> {
+    let code = match num {
+        0x00 => UnsubAckReason::Success,
+        0x11 => UnsubAckReason::NoSubscriptionExisted,
+        0x80 => UnsubAckReason::UnspecifiedError,
+        0x83 => UnsubAckReason::ImplementationSpecificError,
+        0x87 => UnsubAckReason::NotAuthorized,
+        0x8F => UnsubAckReason::TopicFilterInvalid,
+        0x91 => UnsubAckReason::PacketIdentifierInUse,
+        num => return Err(PacketParseError::InvalidSubscribeReasonCode(num)),
     };
-    Ok(v)
-}
-fn reason_for_v4(code: u8) -> Result<SubscribeReasonCode, PacketParseError> {
-    let v = match code {
-        0 => SubscribeReasonCode::QoS0,
-        1 => SubscribeReasonCode::QoS1,
-        2 => SubscribeReasonCode::QoS2,
-        128 => SubscribeReasonCode::Unspecified,
-        v => return Err(PacketParseError::InvalidSubscribeReasonCode(v)),
-    };
-    Ok(v)
+
+    Ok(code)
 }

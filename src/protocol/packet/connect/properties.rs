@@ -1,90 +1,87 @@
 use super::*;
-use crate::protocol::packet::{
-    length, read_mqtt_bytes, read_mqtt_string, read_u16, read_u32, read_u8, write_mqtt_bytes,
-    write_mqtt_string, write_remaining_length,
-};
-use crate::protocol::{property, PacketParseError};
+use crate::protocol::packet::{write_mqtt_bytes, write_mqtt_string, write_remaining_length};
+use crate::protocol::PacketParseError;
 
 impl ConnectProperties {
-    pub fn read(bytes: &mut Bytes) -> Result<Option<ConnectProperties>, PacketParseError> {
-        let mut session_expiry_interval = None;
-        let mut receive_maximum = None;
-        let mut max_packet_size = None;
-        let mut topic_alias_max = None;
-        let mut request_response_info = None;
-        let mut request_problem_info = None;
-        let mut user_properties = Vec::new();
-        let mut authentication_method = None;
-        let mut authentication_data = None;
-
-        let (properties_len_len, properties_len) = length(bytes.iter())?;
-        bytes.advance(properties_len_len);
-        if properties_len == 0 {
-            return Ok(None);
-        }
-
-        let mut cursor = 0;
-        // read until cursor reaches property length. properties_len = 0 will skip this loop
-        while cursor < properties_len {
-            let prop = read_u8(bytes)?;
-            cursor += 1;
-            match property(prop)? {
-                PropertyType::SessionExpiryInterval => {
-                    session_expiry_interval = Some(read_u32(bytes)?);
-                    cursor += 4;
-                }
-                PropertyType::ReceiveMaximum => {
-                    receive_maximum = Some(read_u16(bytes)?);
-                    cursor += 2;
-                }
-                PropertyType::MaximumPacketSize => {
-                    max_packet_size = Some(read_u32(bytes)?);
-                    cursor += 4;
-                }
-                PropertyType::TopicAliasMaximum => {
-                    topic_alias_max = Some(read_u16(bytes)?);
-                    cursor += 2;
-                }
-                PropertyType::RequestResponseInformation => {
-                    request_response_info = Some(read_u8(bytes)?);
-                    cursor += 1;
-                }
-                PropertyType::RequestProblemInformation => {
-                    request_problem_info = Some(read_u8(bytes)?);
-                    cursor += 1;
-                }
-                PropertyType::UserProperty => {
-                    let key = read_mqtt_string(bytes)?;
-                    let value = read_mqtt_string(bytes)?;
-                    cursor += 2 + key.len() + 2 + value.len();
-                    user_properties.push((key, value));
-                }
-                PropertyType::AuthenticationMethod => {
-                    let method = read_mqtt_string(bytes)?;
-                    cursor += 2 + method.len();
-                    authentication_method = Some(method);
-                }
-                PropertyType::AuthenticationData => {
-                    let data = read_mqtt_bytes(bytes)?;
-                    cursor += 2 + data.len();
-                    authentication_data = Some(data);
-                }
-                _ => return Err(PacketParseError::InvalidPropertyType(prop)),
-            }
-        }
-
-        Ok(Some(ConnectProperties {
-            session_expiry_interval,
-            receive_maximum,
-            max_packet_size,
-            topic_alias_max,
-            request_response_info,
-            request_problem_info,
-            user_properties,
-            authentication_method,
-            authentication_data,
-        }))
-    }
+    // pub fn read(bytes: &mut Bytes) -> Result<Option<ConnectProperties>, PacketParseError> {
+    //     let mut session_expiry_interval = None;
+    //     let mut receive_maximum = None;
+    //     let mut max_packet_size = None;
+    //     let mut topic_alias_max = None;
+    //     let mut request_response_info = None;
+    //     let mut request_problem_info = None;
+    //     let mut user_properties = Vec::new();
+    //     let mut authentication_method = None;
+    //     let mut authentication_data = None;
+    //
+    //     let (properties_len_len, properties_len) = length(bytes.iter())?;
+    //     bytes.advance(properties_len_len);
+    //     if properties_len == 0 {
+    //         return Ok(None);
+    //     }
+    //
+    //     let mut cursor = 0;
+    //     // read until cursor reaches property length. properties_len = 0 will skip this loop
+    //     while cursor < properties_len {
+    //         let prop = read_u8(bytes)?;
+    //         cursor += 1;
+    //         match property(prop)? {
+    //             PropertyType::SessionExpiryInterval => {
+    //                 session_expiry_interval = Some(read_u32(bytes)?);
+    //                 cursor += 4;
+    //             }
+    //             PropertyType::ReceiveMaximum => {
+    //                 receive_maximum = Some(read_u16(bytes)?);
+    //                 cursor += 2;
+    //             }
+    //             PropertyType::MaximumPacketSize => {
+    //                 max_packet_size = Some(read_u32(bytes)?);
+    //                 cursor += 4;
+    //             }
+    //             PropertyType::TopicAliasMaximum => {
+    //                 topic_alias_max = Some(read_u16(bytes)?);
+    //                 cursor += 2;
+    //             }
+    //             PropertyType::RequestResponseInformation => {
+    //                 request_response_info = Some(read_u8(bytes)?);
+    //                 cursor += 1;
+    //             }
+    //             PropertyType::RequestProblemInformation => {
+    //                 request_problem_info = Some(read_u8(bytes)?);
+    //                 cursor += 1;
+    //             }
+    //             PropertyType::UserProperty => {
+    //                 let key = read_mqtt_string(bytes)?;
+    //                 let value = read_mqtt_string(bytes)?;
+    //                 cursor += 2 + key.len() + 2 + value.len();
+    //                 user_properties.push((key, value));
+    //             }
+    //             PropertyType::AuthenticationMethod => {
+    //                 let method = read_mqtt_string(bytes)?;
+    //                 cursor += 2 + method.len();
+    //                 authentication_method = Some(method);
+    //             }
+    //             PropertyType::AuthenticationData => {
+    //                 let data = read_mqtt_bytes(bytes)?;
+    //                 cursor += 2 + data.len();
+    //                 authentication_data = Some(data);
+    //             }
+    //             _ => return Err(PacketParseError::InvalidPropertyType(prop)),
+    //         }
+    //     }
+    //
+    //     Ok(Some(ConnectProperties {
+    //         session_expiry_interval,
+    //         receive_maximum,
+    //         max_packet_size,
+    //         topic_alias_max,
+    //         request_response_info,
+    //         request_problem_info,
+    //         user_properties,
+    //         authentication_method,
+    //         authentication_data,
+    //     }))
+    // }
 
     pub fn len(&self) -> usize {
         let mut len = 0;

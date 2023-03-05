@@ -1,8 +1,8 @@
-use crate::tasks::task_client::data::{TraceSubscribe, TraceUnubscribe};
+use crate::tasks::task_client::data::{TraceSubscribe};
 use std::marker::PhantomData;
 
 use crate::protocol::Protocol;
-use crate::{ClientCommand, ClientData, ClientErr, FilterBuilder, ProtocolV4, ProtocolV5, QoS};
+use crate::{ClientCommand, ClientData, ClientErr, FilterBuilder, QoS};
 use anyhow::Result;
 use bytes::Bytes;
 use data::MqttEvent;
@@ -103,14 +103,15 @@ impl<P: crate::Protocol> Client<P> {
     //         .await?;
     //     Ok(id)
     // }
-    pub async fn unsubscribe(&self, topic: String) -> anyhow::Result<u32> {
-        let topic = Arc::new(topic);
-        let trace = TraceUnubscribe::new(vec![topic]);
-        let id = trace.id;
-        self.tx_client_data
-            .send(ClientData::Unsubscribe(trace))
-            .await?;
-        Ok(id)
+    pub async fn unsubscribe(&self, _topic: String) -> anyhow::Result<u32> {
+        todo!()
+        // let topic = Arc::new(topic);
+        // let trace = TraceUnubscribe::new(vec![topic]);
+        // let id = trace.id;
+        // self.tx_client_data
+        //     .send(ClientData::Unsubscribe(trace))
+        //     .await?;
+        // Ok(id)
     }
     pub async fn disconnect(&self) -> anyhow::Result<()> {
         self.tx_client_command

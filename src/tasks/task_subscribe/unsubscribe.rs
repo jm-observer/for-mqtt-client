@@ -2,7 +2,6 @@ use crate::tasks::task_client::data::{TraceUnubscribe, UnsubscribeAck};
 use crate::tasks::task_hub::HubMsg;
 use crate::tasks::utils::{complete_to_tx_packet, CommonErr};
 use crate::tasks::{Senders, TIMEOUT_TO_COMPLETE_TX};
-use crate::v3_1_1::Unsubscribe;
 use log::debug;
 use tokio::spawn;
 
@@ -28,25 +27,21 @@ impl TaskUnsubscribe {
     }
     async fn run(&mut self) -> anyhow::Result<(), CommonErr> {
         debug!("start to unsubscribe");
-        let mut packet = Unsubscribe::new(
-            self.trace_unsubscribe.topics.clone(),
-            self.trace_unsubscribe.packet_id,
-        );
         let mut rx_ack = self.tx.broadcast_tx.tx_unsub_ack.subscribe();
-        complete_to_tx_packet(
+        let ack = complete_to_tx_packet(
             &mut rx_ack,
-            self.trace_unsubscribe.packet_id,
+            self.trace_unsubscribe.packet_id(),
             TIMEOUT_TO_COMPLETE_TX,
             &self.tx,
-            &mut packet,
+            &mut self.trace_unsubscribe.unsubscribe,
         )
         .await?;
         self.tx
             .tx_hub_msg
-            .send(HubMsg::RecoverId(self.trace_unsubscribe.packet_id))
+            .send(HubMsg::RecoverId(self.trace_unsubscribe.packet_id()))
             .await?;
         self.tx
-            .tx_to_user::<UnsubscribeAck>(self.trace_unsubscribe.clone().into());
+            .tx_to_user::<UnsubscribeAck>(UnsubscribeAck::init(ack, self.trace_unsubscribe.id));
         Ok(())
     }
 }

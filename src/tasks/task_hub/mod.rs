@@ -20,7 +20,7 @@ use tokio::{select, spawn};
 
 use crate::protocol::packet::publish::Publish;
 use crate::protocol::packet::Connect;
-use crate::protocol::{MqttOptions, Protocol};
+use crate::protocol::MqttOptions;
 use crate::tasks::task_client::data::MqttEvent;
 use crate::tasks::task_client::Client;
 use crate::tasks::task_ping::TaskPing;
@@ -172,6 +172,16 @@ impl TaskHub {
             NetworkEvent::Connected(_) | NetworkEvent::ConnectFail(_) => {
                 warn!("should not rx NetworkEvent::Disconnected | Connected | ConnectFail when connected")
             }
+            NetworkEvent::BrokerDisconnect(packet) => {
+                // todo
+                self.tx_to_user
+                    .send(MqttEvent::ConnectedErr(format!("{:?}", packet)))?;
+                if self.options.auto_reconnect {
+                    self.state = HubState::ToConnect;
+                } else {
+                    self.state = HubState::Disconnected;
+                }
+            }
         }
         Ok(())
     }
@@ -234,6 +244,17 @@ impl TaskHub {
                 NetworkEvent::ConnectFail(reason) => {
                     info!("connect fail: {:?}", reason);
                     self.tx_to_user.send(MqttEvent::ConnectFail(reason))?;
+                    if self.options.auto_reconnect {
+                        continue;
+                    } else {
+                        self.state = HubState::Disconnected;
+                        return Err(HubToConnectError::ChannelAbnormal);
+                    }
+                }
+                NetworkEvent::BrokerDisconnect(packet) => {
+                    info!("connect fail: {:?}", packet);
+                    self.tx_to_user
+                        .send(MqttEvent::ConnectedErr(format!("{:?}", packet)))?;
                     if self.options.auto_reconnect {
                         continue;
                     } else {

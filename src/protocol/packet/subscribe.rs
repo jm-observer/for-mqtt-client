@@ -36,7 +36,6 @@ impl Subscribe {
             } => {
                 // write packet type
                 buffer.put_u8(0x82);
-                // write remaining length
                 let remaining_len = filters.len() + 2;
                 let remaining_len_bytes = write_remaining_length(buffer, remaining_len);
 
@@ -47,8 +46,20 @@ impl Subscribe {
 
                 1 + remaining_len_bytes + remaining_len
             }
-            Self::V5 { .. } => {
-                todo!()
+            Self::V5 {
+                packet_id,
+                properties,
+                filters,
+            } => {
+                buffer.put_u8(0x82);
+                let remaining_len = filters.len() + 2 + properties.len();
+                let remaining_len_bytes = write_remaining_length(buffer, remaining_len);
+
+                buffer.put_u16(*packet_id);
+                write_mqtt_bytes(buffer, properties.as_ref());
+                write_mqtt_bytes(buffer, filters.as_ref());
+
+                1 + remaining_len_bytes + remaining_len
             }
         }
     }
@@ -89,12 +100,3 @@ impl Default for RetainForwardRule {
 // pub struct SubscribeProperties {
 
 // }
-
-pub struct VariableHeaderV4 {
-    packet_id: u16,
-}
-pub struct VariableHeaderV5 {
-    packet_id: u16,
-    id: Option<usize>,
-    user_properties: Bytes,
-}

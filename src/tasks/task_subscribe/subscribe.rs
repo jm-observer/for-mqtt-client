@@ -1,8 +1,9 @@
-use crate::tasks::task_client::data::{SubscribeAck, SubscribeFilterAck, TraceSubscribe};
+use crate::tasks::task_client::data::TraceSubscribe;
 use crate::tasks::task_hub::HubMsg;
 use crate::tasks::utils::{complete_to_tx_packet, CommonErr};
 use crate::tasks::{Senders, TIMEOUT_TO_COMPLETE_TX};
-use log::{debug, warn};
+use crate::SubscribeAck;
+use log::debug;
 use tokio::spawn;
 
 /// consider the order in which pushlish   are repeated
@@ -42,9 +43,8 @@ impl TaskSubscribe {
             .send(HubMsg::RecoverId(trace_packet.packet_id()))
             .await?;
 
-        todo!();
         // let SubAck { return_codes, .. } = ack;
-        // let TraceSubscribe { id, filters, .. } = trace_packet;
+        let TraceSubscribe { id, .. } = trace_packet;
         // if return_codes.len() != filters.len() {
         //     warn!(
         //         "filters.len {} not equal return_codes.len {}",
@@ -60,8 +60,11 @@ impl TaskSubscribe {
         //         SubscribeFilterAck { path, ack }
         //     })
         //     .collect();
-        // let ack = SubscribeAck { id, filter_ack };
-        // tx.tx_to_user(ack);
+        let ack = SubscribeAck {
+            id,
+            acks: ack.return_codes(),
+        };
+        tx.tx_to_user(ack);
         Ok(())
     }
 }

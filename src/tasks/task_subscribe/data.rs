@@ -1,5 +1,5 @@
 use crate::protocol::packet::suback::SubAck;
-use crate::v3_1_1::UnsubAck;
+use crate::protocol::packet::unsuback::UnsubAck;
 
 #[derive(Debug, Clone)]
 pub enum SubscribeMsg {

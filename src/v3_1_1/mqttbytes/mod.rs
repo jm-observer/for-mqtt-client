@@ -34,7 +34,7 @@ pub use ping::*;
 // pub use suback::*;
 // pub use subscribe::*;
 pub use unsuback::*;
-pub use unsubscribe::*;
+// pub use unsubscribe::*;
 
 /// Encapsulates all MQTT packet types
 // #[derive(Debug, Clone, PartialEq, Eq)]
@@ -112,19 +112,6 @@ pub enum Error {
     /// proceed further
     #[error("At least {0} more bytes required to frame packet")]
     InsufficientBytes(usize),
-}
-
-/// Error during serialization and deserialization
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FixedHeaderError {
-    InsufficientBytes(usize),
-    MalformedRemainingLength,
-}
-
-impl FixedHeaderError {
-    pub fn to_discard(&self) -> bool {
-        *self == Self::MalformedRemainingLength
-    }
 }
 
 // pub fn check(stream: Iter<u8>) -> Result<FixedHeader, Error> {

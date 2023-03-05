@@ -1,8 +1,7 @@
+use crate::protocol::packet::FixedHeaderError;
 use crate::tasks::TaskHub;
-use crate::v3_1_1::FixedHeaderError;
-use crate::{Client, ProtocolV4, ProtocolV5};
+use crate::Client;
 use packet::connect::will::LastWill;
-use std::slice::Iter;
 use std::sync::Arc;
 
 pub mod packet;
@@ -433,21 +432,18 @@ fn len_len(len: usize) -> usize {
     }
 }
 
-/// Parses variable byte integer in the stream and returns the length
-/// and number of bytes that make it. Used for remaining length calculation
-/// as well as for calculating property lengths
-fn len_variable_integer(stream: Iter<u8>) -> Result<(usize, u32), PacketParseError> {
-    let mut len = 0;
-    let mut val = [0u8; 4];
-    for byte in stream {
-        val[len] = *byte;
-        len += 1;
-        if len > 4 {
-            return Err(PacketParseError::MalformedRemainingLength);
-        }
-        if *byte >= 0x80 {
-            continue;
-        }
-    }
-    Ok((len, u32::from_be_bytes(val)))
-}
+// fn len_variable_integer(stream: Iter<u8>) -> Result<(usize, u32), PacketParseError> {
+//     let mut len = 0;
+//     let mut val = [0u8; 4];
+//     for byte in stream {
+//         val[len] = *byte;
+//         len += 1;
+//         if len > 4 {
+//             return Err(PacketParseError::MalformedRemainingLength);
+//         }
+//         if *byte >= 0x80 {
+//             continue;
+//         }
+//     }
+//     Ok((len, u32::from_be_bytes(val)))
+// }

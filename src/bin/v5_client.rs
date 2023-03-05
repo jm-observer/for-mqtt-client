@@ -63,12 +63,12 @@ async fn main() -> Result<()> {
     //         .subscribe("abcfewfe".to_string(), QoS::ExactlyOnce)
     //         .await
     // );
-    // println!(
-    //     "{:?}",
-    //     _client
-    //         .subscribe("abcfewwewew".to_string(), QoS::ExactlyOnce)
-    //         .await
-    // );
+    println!(
+        "{:?}",
+        _client
+            .to_subscribe("abcfewwewew".to_string(), QoS::ExactlyOnce)
+            .await
+    );
     // sleep(Duration::from_secs(2)).await;
     // info!(
     //     "{:?}",
