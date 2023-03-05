@@ -1,8 +1,9 @@
 use crate::tasks::task_client::data::{TraceSubscribe, TraceUnubscribe};
+use std::marker::PhantomData;
 
 use crate::protocol::Protocol;
-use crate::v3_1_1::SubscribeFilter;
-use crate::{ClientCommand, ClientData, ClientErr, QoS};
+use crate::{ClientCommand, ClientData, ClientErr, FilterBuilder, ProtocolV4, ProtocolV5, QoS};
+use anyhow::Result;
 use bytes::Bytes;
 use data::MqttEvent;
 use std::sync::Arc;
@@ -12,27 +13,39 @@ use tokio::sync::mpsc;
 pub mod data;
 
 #[derive(Clone)]
-pub struct Client {
-    pub(crate) protocol: Protocol,
+pub struct Client<P: crate::Protocol> {
     tx_client_command: mpsc::Sender<ClientCommand>,
     tx_client_data: mpsc::Sender<ClientData>,
     tx_to_client: Sender<MqttEvent>,
+    protocol_tmp: PhantomData<P>,
 }
 
-impl Client {
+impl<P: crate::Protocol> Client<P> {
     pub fn init(
         tx_client_data: mpsc::Sender<ClientData>,
         tx_client_command: mpsc::Sender<ClientCommand>,
         tx_to_client: Sender<MqttEvent>,
-        protocol: Protocol,
-    ) -> Self {
-        Self {
+    ) -> Client<P> {
+        Client {
             tx_client_command,
             tx_to_client,
             tx_client_data,
-            protocol,
+            protocol_tmp: Default::default(),
         }
     }
+    // pub fn init_v5(
+    //     tx_client_data: mpsc::Sender<ClientData>,
+    //     tx_client_command: mpsc::Sender<ClientCommand>,
+    //     tx_to_client: Sender<MqttEvent>,
+    // ) -> Client<ProtocolV5> {
+    //     Client {
+    //         tx_client_command,
+    //         tx_to_client,
+    //         tx_client_data,
+    //         protocol: Protocol::V5,
+    //         protocol_tmp: Default::default(),
+    //     }
+    // }
     pub async fn publish<T: Into<Arc<String>>, D: Into<Bytes>>(
         &self,
         topic: T,
@@ -45,7 +58,8 @@ impl Client {
         if payload.len() + 4 + topic.len() > 268_435_455 {
             return Err(ClientErr::PayloadTooLong);
         };
-        let trace_publish = ClientData::publish(topic, qos, payload.into(), retain, self.protocol);
+        let trace_publish =
+            ClientData::publish(topic, qos, payload.into(), retain, self.protocol());
         let id = trace_publish.id();
         self.tx_client_data.send(trace_publish).await?;
         Ok(id)
@@ -61,20 +75,34 @@ impl Client {
         if payload.len() + 4 + topic.len() > 268_435_455 {
             return Err(ClientErr::PayloadTooLong);
         };
-        let trace_publish = ClientData::publish(topic, qos, payload, retain, self.protocol);
+        let trace_publish = ClientData::publish(topic, qos, payload, retain, self.protocol());
         let id = trace_publish.id();
         self.tx_client_data.send(trace_publish).await?;
         Ok(id)
     }
-    pub async fn subscribe<T: Into<Arc<String>>>(&self, topic: T, qos: QoS) -> anyhow::Result<u32> {
-        let filter = SubscribeFilter::new(topic, qos);
-        let trace = TraceSubscribe::new(vec![filter]);
-        let id = trace.id;
+    pub async fn to_subscribe<T: Into<String>>(&self, topic: T, qos: QoS) -> Result<u32> {
+        let subscribe: TraceSubscribe = FilterBuilder::<P>::new(topic.into(), qos).build().into();
+        let id = subscribe.id;
         self.tx_client_data
-            .send(ClientData::Subscribe(trace))
+            .send(ClientData::Subscribe(subscribe))
             .await?;
         Ok(id)
     }
+    // pub async fn to_subscribe<P: Into<String>>(&self, topic: P, qos: QoS) -> FilterBuilder {
+    //     let mut builder = SubscribeBuilder::<T>::default();
+    //     builder.add_filter(topic.into(), qos);
+    //
+    //     FilterBuilder::new(topic, qos)
+    //
+    //
+    //     let filter = SubscribeFilter::new(topic, qos);
+    //     let trace = TraceSubscribe::new(vec![filter]);
+    //     let id = trace.id;
+    //     self.tx_client_data
+    //         .send(ClientData::Subscribe(trace))
+    //         .await?;
+    //     Ok(id)
+    // }
     pub async fn unsubscribe(&self, topic: String) -> anyhow::Result<u32> {
         let topic = Arc::new(topic);
         let trace = TraceUnubscribe::new(vec![topic]);
@@ -92,5 +120,13 @@ impl Client {
     }
     pub fn init_receiver(&self) -> Receiver<MqttEvent> {
         self.tx_to_client.subscribe()
+    }
+
+    fn protocol(&self) -> Protocol {
+        if P::is_v4() {
+            Protocol::V4
+        } else {
+            Protocol::V5
+        }
     }
 }

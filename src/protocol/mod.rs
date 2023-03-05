@@ -1,7 +1,8 @@
 use crate::tasks::TaskHub;
 use crate::v3_1_1::FixedHeaderError;
-use crate::Client;
+use crate::{Client, ProtocolV4, ProtocolV5};
 use packet::connect::will::LastWill;
+use std::slice::Iter;
 use std::sync::Arc;
 
 pub mod packet;
@@ -135,10 +136,10 @@ impl MqttOptions {
     }
 
     /// Username and password
-    pub fn set_credentials<U: Into<Arc<String>>, P: Into<Arc<String>>>(
+    pub fn set_credentials<U: Into<Arc<String>>, P1: Into<Arc<String>>>(
         &mut self,
         username: U,
-        password: P,
+        password: P1,
     ) -> &mut Self {
         self.credentials = Some((username.into(), password.into()));
         self
@@ -149,7 +150,7 @@ impl MqttOptions {
         self.credentials.clone()
     }
 
-    pub async fn connect(self) -> Client {
+    pub async fn connect<P: crate::Protocol>(self) -> Client<P> {
         TaskHub::connect(self).await
     }
 }
@@ -266,7 +267,7 @@ impl From<FixedHeaderError> for PacketParseError {
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum PropertyType {
+pub enum PropertyType {
     PayloadFormatIndicator = 1,
     MessageExpiryInterval = 2,
     ContentType = 3,
@@ -430,4 +431,23 @@ fn len_len(len: usize) -> usize {
     } else {
         1
     }
+}
+
+/// Parses variable byte integer in the stream and returns the length
+/// and number of bytes that make it. Used for remaining length calculation
+/// as well as for calculating property lengths
+fn len_variable_integer(stream: Iter<u8>) -> Result<(usize, u32), PacketParseError> {
+    let mut len = 0;
+    let mut val = [0u8; 4];
+    for byte in stream {
+        val[len] = *byte;
+        len += 1;
+        if len > 4 {
+            return Err(PacketParseError::MalformedRemainingLength);
+        }
+        if *byte >= 0x80 {
+            continue;
+        }
+    }
+    Ok((len, u32::from_be_bytes(val)))
 }

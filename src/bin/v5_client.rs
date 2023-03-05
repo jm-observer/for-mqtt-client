@@ -2,8 +2,8 @@
 
 use anyhow::Result;
 use for_mqtt_client::protocol::MqttOptions;
-use for_mqtt_client::MqttEvent;
 use for_mqtt_client::QoS;
+use for_mqtt_client::{MqttEvent, ProtocolV5};
 use log::LevelFilter::{Debug, Info};
 use log::{debug, error, info, warn};
 use std::io::Read;
@@ -23,7 +23,7 @@ async fn main() -> Result<()> {
     options.set_keep_alive(30);
     options.auto_reconnect();
 
-    let _client = options.connect().await;
+    let _client = options.connect::<ProtocolV5>().await;
     let mut event_rx = _client.init_receiver();
     spawn(async move {
         while let Ok(event) = event_rx.recv().await {

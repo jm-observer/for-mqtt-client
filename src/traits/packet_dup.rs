@@ -1,6 +1,7 @@
 use crate::protocol::packet::publish::Publish;
+use crate::protocol::packet::subscribe::Subscribe;
 use crate::protocol::packet::{PubRec, PubRel};
-use crate::v3_1_1::{Subscribe, Unsubscribe};
+use crate::v3_1_1::Unsubscribe;
 use bytes::{Bytes, BytesMut};
 use std::sync::Arc;
 

@@ -28,6 +28,31 @@ pub struct AtLeastOnce;
 #[derive(Debug, Clone)]
 pub struct ExactlyOnce;
 
+#[derive(Debug, Clone)]
+pub struct ProtocolV4;
+
+#[derive(Debug, Clone)]
+pub struct ProtocolV5;
+
+pub trait Protocol {
+    fn is_v4() -> bool {
+        true
+    }
+    fn is_v5() -> bool {
+        false
+    }
+}
+
+impl Protocol for ProtocolV4 {}
+impl Protocol for ProtocolV5 {
+    fn is_v5() -> bool {
+        true
+    }
+    fn is_v4() -> bool {
+        false
+    }
+}
+
 /// Quality of service
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd)]
 pub enum QoSWithPacketId {

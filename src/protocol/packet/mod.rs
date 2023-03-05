@@ -4,12 +4,16 @@ pub(crate) mod connect;
 // pub(crate) mod pubcomp;
 mod pubcommon;
 pub(crate) mod publish;
+pub(crate) mod suback;
+pub(crate) mod subscribe;
 // pub(crate) mod pubrel;
 
 pub use crate::protocol::packet::pubcommon::{PubAck, PubComp, PubRec, PubRel};
 use crate::protocol::packet::publish::Publish;
+use crate::protocol::packet::suback::SubAck;
+use crate::protocol::packet::subscribe::Subscribe;
 use crate::protocol::{FixedHeader, PacketParseError, PacketType, Protocol};
-use crate::v3_1_1::{FixedHeaderError, SubAck, Subscribe, UnsubAck, Unsubscribe};
+use crate::v3_1_1::{FixedHeaderError, UnsubAck, Unsubscribe};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 pub use connack::*;
 pub use connect::*;
@@ -80,7 +84,7 @@ pub fn read_from_network(
         PacketType::PubRec => Packet::PubRec(PubRec::read(fixed_header, packet, version)?),
         PacketType::PubRel => Packet::PubRel(PubRel::read(fixed_header, packet, version)?),
         PacketType::PubComp => Packet::PubComp(PubComp::read(fixed_header, packet, version)?),
-        PacketType::SubAck => Packet::SubAck(SubAck::read(fixed_header, packet)?),
+        PacketType::SubAck => Packet::SubAck(SubAck::read(fixed_header, packet, version)?),
         PacketType::UnsubAck => Packet::UnsubAck(UnsubAck::read(fixed_header, packet)?),
         // PacketType::PingResp => Packet::PingResp,
         PacketType::Disconnect => match version {

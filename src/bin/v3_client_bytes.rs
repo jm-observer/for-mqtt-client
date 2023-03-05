@@ -2,8 +2,8 @@
 
 use anyhow::Result;
 use for_mqtt_client::protocol::MqttOptions;
-use for_mqtt_client::MqttEvent;
 use for_mqtt_client::QoS;
+use for_mqtt_client::{MqttEvent, ProtocolV4};
 use log::LevelFilter::{Debug, Info};
 use log::{debug, error, info, warn};
 use std::io::Read;
@@ -22,7 +22,7 @@ async fn main() -> Result<()> {
         .start();
     let mut options = MqttOptions::new_v4("abc111".to_string(), "broker.emqx.io".to_string(), 1883);
     options.set_keep_alive(30);
-    let _client = options.connect().await;
+    let _client = options.connect::<ProtocolV4>().await;
     let mut event_rx = _client.init_receiver();
     spawn(async move {
         while let Ok(event) = event_rx.recv().await {

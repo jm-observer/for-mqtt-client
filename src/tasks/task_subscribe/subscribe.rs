@@ -2,7 +2,6 @@ use crate::tasks::task_client::data::{SubscribeAck, SubscribeFilterAck, TraceSub
 use crate::tasks::task_hub::HubMsg;
 use crate::tasks::utils::{complete_to_tx_packet, CommonErr};
 use crate::tasks::{Senders, TIMEOUT_TO_COMPLETE_TX};
-use crate::v3_1_1::{SubAck, Subscribe, SubscribeFilter};
 use log::{debug, warn};
 use tokio::spawn;
 
@@ -24,41 +23,45 @@ impl TaskSubscribe {
         });
     }
     async fn run(self) -> anyhow::Result<(), CommonErr> {
-        let TaskSubscribe { tx, trace_packet } = self;
+        let TaskSubscribe {
+            tx,
+            mut trace_packet,
+        } = self;
         debug!("start to subscribe");
-        let mut packet = Subscribe::new(trace_packet.filters.clone(), trace_packet.packet_id);
         let mut rx_ack = tx.broadcast_tx.tx_sub_ack.subscribe();
         let ack = complete_to_tx_packet(
             &mut rx_ack,
-            trace_packet.packet_id,
+            trace_packet.packet_id(),
             TIMEOUT_TO_COMPLETE_TX,
             &tx,
-            &mut packet,
+            &mut trace_packet.subscribe,
         )
         .await?;
-        let SubAck { return_codes, .. } = ack;
+
         tx.tx_hub_msg
-            .send(HubMsg::RecoverId(trace_packet.packet_id))
+            .send(HubMsg::RecoverId(trace_packet.packet_id()))
             .await?;
 
-        let TraceSubscribe { id, filters, .. } = trace_packet;
-        if return_codes.len() != filters.len() {
-            warn!(
-                "filters.len {} not equal return_codes.len {}",
-                filters.len(),
-                return_codes.len()
-            );
-        }
-        let filter_ack: Vec<SubscribeFilterAck> = return_codes
-            .into_iter()
-            .zip(filters.into_iter())
-            .map(|(ack, filter)| {
-                let SubscribeFilter { path, .. } = filter;
-                SubscribeFilterAck { path, ack }
-            })
-            .collect();
-        let ack = SubscribeAck { id, filter_ack };
-        tx.tx_to_user(ack);
+        todo!();
+        // let SubAck { return_codes, .. } = ack;
+        // let TraceSubscribe { id, filters, .. } = trace_packet;
+        // if return_codes.len() != filters.len() {
+        //     warn!(
+        //         "filters.len {} not equal return_codes.len {}",
+        //         filters.len(),
+        //         return_codes.len()
+        //     );
+        // }
+        // let filter_ack: Vec<SubscribeFilterAck> = return_codes
+        //     .into_iter()
+        //     .zip(filters.into_iter())
+        //     .map(|(ack, filter)| {
+        //         let SubscribeFilter { path, .. } = filter;
+        //         SubscribeFilterAck { path, ack }
+        //     })
+        //     .collect();
+        // let ack = SubscribeAck { id, filter_ack };
+        // tx.tx_to_user(ack);
         Ok(())
     }
 }

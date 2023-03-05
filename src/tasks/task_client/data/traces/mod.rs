@@ -3,8 +3,8 @@ use std::marker::PhantomData;
 use std::mem::MaybeUninit;
 
 use crate::tasks::HubError;
-use crate::v3_1_1::SubscribeFilter;
 
+use crate::protocol::packet::subscribe::Subscribe;
 use crate::protocol::Protocol;
 use anyhow::Result;
 use bytes::Bytes;
@@ -123,27 +123,20 @@ impl<T> PartialEq<u32> for TracePublishQos<T> {
 #[derive(Debug, Clone)]
 pub struct TraceSubscribe {
     pub(crate) id: u32,
-    pub(crate) packet_id: u16,
-    pub filters: Vec<SubscribeFilter>,
+    pub(crate) subscribe: Subscribe,
 }
 
 impl TraceSubscribe {
-    pub fn new(filters: Vec<SubscribeFilter>) -> Self {
-        Self {
-            id: Id::id(),
-            packet_id: 0,
-            filters,
-        }
-    }
     pub(crate) async fn set_packet_id(
         &mut self,
         b: &mut Consumer<u16, Arc<SharedRb>>,
     ) -> Result<(), HubError> {
-        self.packet_id = request_id(b).await?;
+        let packet_id = request_id(b).await?;
+        self.subscribe.set_packet_id(packet_id);
         Ok(())
     }
     pub(crate) fn packet_id(&self) -> u16 {
-        self.packet_id
+        self.subscribe.packet_id()
     }
 }
 

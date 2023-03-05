@@ -1,4 +1,5 @@
 mod acks;
+mod builder;
 mod traces;
 
 pub use acks::*;
@@ -6,6 +7,8 @@ use bytes::Bytes;
 
 use std::sync::Arc;
 pub use traces::*;
+
+pub use builder::*;
 
 use crate::tasks::task_network::ToConnectError;
 

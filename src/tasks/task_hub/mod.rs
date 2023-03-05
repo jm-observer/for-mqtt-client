@@ -20,7 +20,7 @@ use tokio::{select, spawn};
 
 use crate::protocol::packet::publish::Publish;
 use crate::protocol::packet::Connect;
-use crate::protocol::MqttOptions;
+use crate::protocol::{MqttOptions, Protocol};
 use crate::tasks::task_client::data::MqttEvent;
 use crate::tasks::task_client::Client;
 use crate::tasks::task_ping::TaskPing;
@@ -44,16 +44,17 @@ pub struct TaskHub {
     rx_client_command: mpsc::Receiver<ClientCommand>,
 }
 impl TaskHub {
-    pub async fn connect(options: MqttOptions) -> Client {
+    pub async fn connect<P: crate::Protocol>(options: MqttOptions) -> Client<P> {
         let (tx_client_data, rx_client_data) = mpsc::channel(1024);
         let (tx_client_command, rx_client_command) = mpsc::channel(1024);
         let (tx_to_user, _) = channel(1024);
-        let client = Client::init(
-            tx_client_data,
-            tx_client_command,
-            tx_to_user.clone(),
-            options.protocol,
-        );
+        let client = Client::init(tx_client_data, tx_client_command, tx_to_user.clone());
+        // let client = Client::init(
+        //     tx_client_data,
+        //     tx_client_command,
+        //     tx_to_user.clone(),
+        //     options.protocol,
+        // );
         let mut hub = Self {
             options,
             state: HubState::default(),

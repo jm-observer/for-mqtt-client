@@ -1,7 +1,6 @@
-
 use crate::tasks::task_client::data::TraceUnubscribe;
-use crate::v3_1_1::SubscribeReasonCode;
 
+use crate::protocol::packet::suback::SubscribeReasonCode;
 use std::sync::Arc;
 
 #[derive(Debug, Clone)]
