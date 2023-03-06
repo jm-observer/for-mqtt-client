@@ -3,18 +3,15 @@ mod builder;
 mod traces;
 
 pub use acks::*;
-use bytes::Bytes;
-
-use std::sync::Arc;
+pub use builder::*;
 pub use traces::*;
 
-pub use builder::*;
-
-use crate::tasks::task_network::ToConnectError;
-
-use crate::protocol::packet::publish::Publish;
+use crate::protocol::packet::Publish;
 use crate::protocol::Protocol;
+use crate::tasks::task_network::ToConnectError;
 use crate::{AtLeastOnce, AtMostOnce, ExactlyOnce, QoS};
+use bytes::Bytes;
+use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc};
 
 #[derive(Debug, Clone)]

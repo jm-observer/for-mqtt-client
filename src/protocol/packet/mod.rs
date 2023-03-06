@@ -2,28 +2,29 @@ pub(crate) mod connack;
 pub(crate) mod connect;
 // pub(crate) mod puback;
 // pub(crate) mod pubcomp;
-pub(crate) mod disconnect;
-pub(crate) mod ping;
+mod disconnect;
+mod ping;
 mod pubcommon;
-pub(crate) mod publish;
-pub(crate) mod suback;
-pub(crate) mod subscribe;
-pub(crate) mod unsuback;
-pub(crate) mod unsubscribe;
-// pub(crate) mod pubrel;
-
-use crate::protocol::packet::disconnect::Disconnect;
+mod publish;
+mod suback;
+mod subscribe;
+mod unsuback;
+mod unsubscribe;
 
 pub use crate::protocol::packet::pubcommon::{PubAck, PubComp, PubRec, PubRel};
-use crate::protocol::packet::publish::Publish;
-use crate::protocol::packet::suback::SubAck;
-use crate::protocol::packet::subscribe::Subscribe;
-use crate::protocol::packet::unsuback::UnsubAck;
-use crate::protocol::packet::unsubscribe::Unsubscribe;
+pub use crate::protocol::packet::publish::Publish;
+pub use crate::protocol::packet::suback::{SubAck, SubscribeReasonCode};
+pub(crate) use crate::protocol::packet::subscribe::RetainForwardRule;
+pub use crate::protocol::packet::subscribe::Subscribe;
+pub use crate::protocol::packet::unsuback::{UnsubAck, UnsubAckReason};
+pub use crate::protocol::packet::unsubscribe::Unsubscribe;
 use crate::protocol::{FixedHeader, PacketParseError, PacketType, Protocol};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 pub use connack::*;
 pub use connect::*;
+pub use disconnect::*;
+pub use ping::*;
+
 use log::error;
 use std::slice::Iter;
 

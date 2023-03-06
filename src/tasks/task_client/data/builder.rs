@@ -1,8 +1,8 @@
 mod unsubscribe;
 
 use crate::datas::id::Id;
-use crate::protocol::packet::subscribe::{RetainForwardRule, Subscribe};
 use crate::protocol::packet::{write_mqtt_bytes, write_mqtt_string, write_remaining_length};
+use crate::protocol::packet::{RetainForwardRule, Subscribe};
 use crate::protocol::PropertyType;
 use crate::{Protocol, ProtocolV5, QoS, TraceSubscribe};
 use anyhow::bail;

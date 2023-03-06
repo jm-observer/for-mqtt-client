@@ -33,13 +33,13 @@ pub struct Connect {
 }
 
 impl Connect {
-    pub fn new(option: &MqttOptions) -> Result<Bytes, PacketParseError> {
+    pub fn new(option: &MqttOptions, protocol: Protocol) -> Result<Bytes, PacketParseError> {
         let login = match &option.credentials {
             None => None,
             Some((user, password)) => Some(Login::new(user.clone(), password.clone())),
         };
         let packet = Connect {
-            protocol: option.protocol.clone(),
+            protocol,
             keep_alive: option.keep_alive.into(),
             client_id: option.client_id.clone(),
             clean_session: option.clean_session,

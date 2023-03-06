@@ -12,8 +12,8 @@ mod data;
 
 use crate::tasks::task_hub::HubMsg;
 
-use crate::protocol::packet::disconnect::Disconnect;
-use crate::protocol::packet::ping::PingResp;
+use crate::protocol::packet::Disconnect;
+use crate::protocol::packet::PingResp;
 use crate::protocol::packet::{read_from_network, ConnectReturnCode, Packet};
 use crate::protocol::Protocol;
 use crate::tasks::Senders;

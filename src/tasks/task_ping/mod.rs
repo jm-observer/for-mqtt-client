@@ -1,4 +1,4 @@
-use crate::protocol::packet::ping::PingReq;
+use crate::protocol::packet::PingReq;
 use crate::tasks::task_hub::HubMsg;
 use crate::tasks::utils::CommonErr;
 use crate::tasks::Senders;

@@ -1,4 +1,4 @@
-use crate::protocol::packet::publish::Publish;
+use crate::protocol::packet::Publish;
 use crate::tasks::task_client::data::TracePublishQos;
 use crate::tasks::task_hub::HubMsg;
 use crate::tasks::utils::{complete_to_tx_packet, CommonErr};

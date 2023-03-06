@@ -1,10 +1,9 @@
 use crate::tasks::task_client::data::TraceSubscribe;
-use std::marker::PhantomData;
 
 use crate::protocol::Protocol;
 use crate::{
-    ClientCommand, ClientData, ClientErr, FilterBuilder, QoS, TraceUnubscribe,
-    UnsubscribeFilterBuilder,
+    ClientCommand, ClientData, ClientErr, FilterBuilder, ProtocolV4, ProtocolV5, QoS,
+    TraceUnubscribe, UnsubscribeFilterBuilder,
 };
 use anyhow::Result;
 use bytes::Bytes;
@@ -16,24 +15,25 @@ use tokio::sync::mpsc;
 pub mod data;
 
 #[derive(Clone)]
-pub struct Client<P: crate::Protocol> {
+pub struct Client {
+    protocol: Protocol,
     tx_client_command: mpsc::Sender<ClientCommand>,
     tx_client_data: mpsc::Sender<ClientData>,
     tx_to_client: Sender<MqttEvent>,
-    protocol_tmp: PhantomData<P>,
 }
 
-impl<P: crate::Protocol> Client<P> {
+impl Client {
     pub fn init(
         tx_client_data: mpsc::Sender<ClientData>,
         tx_client_command: mpsc::Sender<ClientCommand>,
         tx_to_client: Sender<MqttEvent>,
-    ) -> Client<P> {
+        protocol: Protocol,
+    ) -> Client {
         Client {
             tx_client_command,
             tx_to_client,
             tx_client_data,
-            protocol_tmp: Default::default(),
+            protocol,
         }
     }
     // pub fn init_v5(
@@ -84,30 +84,30 @@ impl<P: crate::Protocol> Client<P> {
         Ok(id)
     }
     pub async fn to_subscribe<T: Into<String>>(&self, topic: T, qos: QoS) -> Result<u32> {
-        let subscribe: TraceSubscribe = FilterBuilder::<P>::new(topic.into(), qos).build().into();
+        let subscribe: TraceSubscribe = match self.protocol {
+            Protocol::V4 => FilterBuilder::<ProtocolV4>::new(topic.into(), qos)
+                .build()
+                .into(),
+            Protocol::V5 => FilterBuilder::<ProtocolV5>::new(topic.into(), qos)
+                .build()
+                .into(),
+        };
         let id = subscribe.id;
         self.tx_client_data
             .send(ClientData::Subscribe(subscribe))
             .await?;
         Ok(id)
     }
-    // pub async fn to_subscribe<P: Into<String>>(&self, topic: P, qos: QoS) -> FilterBuilder {
-    //     let mut builder = SubscribeBuilder::<T>::default();
-    //     builder.add_filter(topic.into(), qos);
-    //
-    //     FilterBuilder::new(topic, qos)
-    //
-    //
-    //     let filter = SubscribeFilter::new(topic, qos);
-    //     let trace = TraceSubscribe::new(vec![filter]);
-    //     let id = trace.id;
-    //     self.tx_client_data
-    //         .send(ClientData::Subscribe(trace))
-    //         .await?;
-    //     Ok(id)
-    // }
     pub async fn unsubscribe(&self, topic: String) -> anyhow::Result<u32> {
-        let unsubscribe: TraceUnubscribe = UnsubscribeFilterBuilder::<P>::new(topic).build().into();
+        let unsubscribe: TraceUnubscribe = match self.protocol {
+            Protocol::V4 => UnsubscribeFilterBuilder::<ProtocolV4>::new(topic)
+                .build()
+                .into(),
+            Protocol::V5 => UnsubscribeFilterBuilder::<ProtocolV5>::new(topic)
+                .build()
+                .into(),
+        };
+
         let id = unsubscribe.id;
         self.tx_client_data
             .send(ClientData::Unsubscribe(unsubscribe))
@@ -132,10 +132,6 @@ impl<P: crate::Protocol> Client<P> {
     }
 
     fn protocol(&self) -> Protocol {
-        if P::is_v4() {
-            Protocol::V4
-        } else {
-            Protocol::V5
-        }
+        self.protocol
     }
 }

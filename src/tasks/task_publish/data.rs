@@ -1,4 +1,4 @@
-use crate::protocol::packet::publish::Publish;
+use crate::protocol::packet::Publish;
 use crate::protocol::packet::{PubAck, PubComp, PubRec, PubRel};
 
 #[derive(Clone, Debug)]

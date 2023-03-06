@@ -1,6 +1,5 @@
 use crate::protocol::packet::{length, read_mqtt_string, read_u16, read_u8};
 use crate::protocol::{property, FixedHeader, PacketParseError, PropertyType, Protocol};
-use crate::QoS;
 use bytes::{Buf, Bytes};
 
 /// Acknowledgement to subscribe
@@ -92,7 +91,7 @@ pub enum SubscribeReasonCode {
     QoS0,
     QoS1,
     QoS2,
-    Success(QoS),
+    // Success(QoS),
     Failure,
     Unspecified,
     ImplementationSpecific,

@@ -5,8 +5,8 @@ use std::ops::Deref;
 use std::sync::Arc;
 use tokio::io;
 
-use crate::protocol::packet::disconnect::Disconnect;
 use crate::protocol::packet::ConnectReturnFailCode;
+use crate::protocol::packet::Disconnect;
 use crate::protocol::{PacketParseError, PacketType};
 use tokio::sync::{broadcast, mpsc};
 

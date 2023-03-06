@@ -4,8 +4,8 @@ use std::mem::MaybeUninit;
 
 use crate::tasks::HubError;
 
-use crate::protocol::packet::subscribe::Subscribe;
-use crate::protocol::packet::unsubscribe::Unsubscribe;
+use crate::protocol::packet::Subscribe;
+use crate::protocol::packet::Unsubscribe;
 use crate::protocol::Protocol;
 use anyhow::Result;
 use bytes::Bytes;

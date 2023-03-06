@@ -8,7 +8,6 @@ pub mod packet;
 
 #[derive(Debug, Clone)]
 pub struct MqttOptions {
-    pub(crate) protocol: Protocol,
     /// broker address that you want to connect to
     broker_addr: String,
     /// broker port
@@ -36,25 +35,13 @@ pub struct MqttOptions {
 }
 
 impl MqttOptions {
-    pub fn new_v4<S: Into<Arc<String>>, T: Into<String>>(id: S, host: T, port: u16) -> MqttOptions {
-        Self::new(id, host, port, Protocol::V4)
-    }
-    pub fn new_v5<S: Into<Arc<String>>, T: Into<String>>(id: S, host: T, port: u16) -> MqttOptions {
-        Self::new(id, host, port, Protocol::V5)
-    }
-    fn new<S: Into<Arc<String>>, T: Into<String>>(
-        id: S,
-        host: T,
-        port: u16,
-        protocol: Protocol,
-    ) -> MqttOptions {
+    pub fn new<S: Into<Arc<String>>, T: Into<String>>(id: S, host: T, port: u16) -> MqttOptions {
         let id = id.into();
         if id.starts_with(' ') || id.is_empty() {
             panic!("Invalid client id");
         }
 
         MqttOptions {
-            protocol,
             broker_addr: host.into(),
             port,
             keep_alive: 60,
@@ -149,8 +136,11 @@ impl MqttOptions {
         self.credentials.clone()
     }
 
-    pub async fn connect<P: crate::Protocol>(self) -> Client<P> {
-        TaskHub::connect(self).await
+    pub async fn connect_to_v4(self) -> Client {
+        TaskHub::connect(self, Protocol::V4).await
+    }
+    pub async fn connect_to_v5(self) -> Client {
+        TaskHub::connect(self, Protocol::V5).await
     }
 }
 

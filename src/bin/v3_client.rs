@@ -20,11 +20,11 @@ async fn main() -> Result<()> {
         .log_to_stdout()
         .start();
     let mut options =
-        MqttOptions::new_v4("abc111sfew".to_string(), "broker.emqx.io".to_string(), 1883);
+        MqttOptions::new("abc111sfew".to_string(), "broker.emqx.io".to_string(), 1883);
     options.set_keep_alive(30);
     options.auto_reconnect();
 
-    let _client = options.connect::<ProtocolV4>().await;
+    let _client = options.connect_to_v4().await;
     let mut event_rx = _client.init_receiver();
     spawn(async move {
         while let Ok(event) = event_rx.recv().await {
@@ -58,62 +58,22 @@ async fn main() -> Result<()> {
             .to_subscribe("abcfew".to_string(), QoS::ExactlyOnce)
             .await
     );
-    println!(
-        "{:?}",
-        _client
-            .to_subscribe("abcfewfe".to_string(), QoS::ExactlyOnce)
-            .await
-    );
-    println!(
-        "{:?}",
-        _client
-            .to_subscribe("abcfewwewew".to_string(), QoS::ExactlyOnce)
-            .await
-    );
-    sleep(Duration::from_secs(12)).await;
+    sleep(Duration::from_secs(5)).await;
     info!(
         "{:?}",
         _client
             .publish(
                 "abcfew".to_string(),
-                QoS::ExactlyOnce,
+                QoS::AtMostOnce,
                 "abc".as_bytes(),
                 false
             )
             .await?
     );
-    info!(
-        "{:?}",
-        _client
-            .publish(
-                "abcfew".to_string(),
-                QoS::ExactlyOnce,
-                "abc".as_bytes(),
-                false
-            )
-            .await?
-    );
-    info!(
-        "{:?}",
-        _client
-            .publish(
-                "abcfew".to_string(),
-                QoS::ExactlyOnce,
-                "abc".as_bytes(),
-                false
-            )
-            .await?
-    );
-    sleep(Duration::from_secs(2)).await;
+    sleep(Duration::from_secs(15)).await;
     _client.unsubscribe("abcfew".to_string()).await?;
-    sleep(Duration::from_secs(20)).await;
-    info!(
-        "{:?}",
-        _client
-            .publish("abcfew".to_string(), QoS::ExactlyOnce, "abc", false)
-            .await?
-    );
-
+    sleep(Duration::from_secs(90)).await;
+    _client.disconnect().await?;
     sleep(Duration::from_secs(120)).await;
     Ok(())
 }

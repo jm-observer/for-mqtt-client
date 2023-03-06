@@ -1,4 +1,4 @@
-use crate::protocol::packet::publish::Publish;
+use crate::protocol::packet::Publish;
 use crate::tasks::task_client::data::TracePublishQos;
 use crate::tasks::utils::CommonErr;
 use crate::tasks::Senders;

@@ -18,9 +18,9 @@ use tokio::sync::mpsc::error::TryRecvError;
 use tokio::time::sleep;
 use tokio::{select, spawn};
 
-use crate::protocol::packet::publish::Publish;
 use crate::protocol::packet::Connect;
-use crate::protocol::MqttOptions;
+use crate::protocol::packet::Publish;
+use crate::protocol::{MqttOptions, Protocol};
 use crate::tasks::task_client::data::MqttEvent;
 use crate::tasks::task_client::Client;
 use crate::tasks::task_ping::TaskPing;
@@ -34,6 +34,7 @@ pub use data::*;
 type SharedRb = ringbuf::SharedRb<u16, Vec<MaybeUninit<u16>>>;
 
 pub struct TaskHub {
+    protocol: Protocol,
     options: MqttOptions,
     state: HubState,
     tx_to_user: Sender<MqttEvent>,
@@ -44,11 +45,16 @@ pub struct TaskHub {
     rx_client_command: mpsc::Receiver<ClientCommand>,
 }
 impl TaskHub {
-    pub async fn connect<P: crate::Protocol>(options: MqttOptions) -> Client<P> {
+    pub async fn connect(options: MqttOptions, protocol: Protocol) -> Client {
         let (tx_client_data, rx_client_data) = mpsc::channel(1024);
         let (tx_client_command, rx_client_command) = mpsc::channel(1024);
         let (tx_to_user, _) = channel(1024);
-        let client = Client::init(tx_client_data, tx_client_command, tx_to_user.clone());
+        let client = Client::init(
+            tx_client_data,
+            tx_client_command,
+            tx_to_user.clone(),
+            protocol,
+        );
         // let client = Client::init(
         //     tx_client_data,
         //     tx_client_command,
@@ -64,6 +70,7 @@ impl TaskHub {
             rx_client_command,
             tx_to_user,
             client_data: Default::default(),
+            protocol,
         };
         let _event_rx = client.init_receiver();
 
@@ -214,9 +221,9 @@ impl TaskHub {
                 port,
                 senders.clone(),
                 rx_network_data,
-                Connect::new(&self.options).unwrap(),
+                Connect::new(&self.options, self.protocol).unwrap(),
                 rx_hub_network_command,
-                self.options.protocol.clone(),
+                self.protocol.clone(),
             )
             .run();
             debug!("try to connect");
@@ -318,7 +325,7 @@ impl TaskHub {
                     } else {
                         self.rx_publish.insert(id, publish);
                         self.rx_publish_id.insert(id, id);
-                        TaskPublishRxQos1::init(senders.clone(), id, self.options.protocol);
+                        TaskPublishRxQos1::init(senders.clone(), id, self.protocol);
                     }
                 }
                 QoSWithPacketId::ExactlyOnce(id) => {

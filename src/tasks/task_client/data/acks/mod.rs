@@ -1,5 +1,5 @@
-use crate::protocol::packet::suback::SubscribeReasonCode;
-use crate::protocol::packet::unsuback::{UnsubAck, UnsubAckReason};
+use crate::protocol::packet::SubscribeReasonCode;
+use crate::protocol::packet::{UnsubAck, UnsubAckReason};
 
 #[derive(Debug, Clone)]
 pub struct SubscribeAck {
