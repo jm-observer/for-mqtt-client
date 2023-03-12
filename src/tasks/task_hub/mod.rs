@@ -236,6 +236,7 @@ impl TaskHub {
                 NetworkEvent::Connected(session_present) => {
                     debug!("Connected");
                     self.state = HubState::Connected;
+                    self.init_keep_alive_check(&senders);
                     self.tx_to_user
                         .send(MqttEvent::ConnectSuccess(session_present))?;
                     for data in self.client_data.iter() {
