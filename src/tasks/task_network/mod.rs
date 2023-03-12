@@ -3,8 +3,6 @@ use anyhow::Result;
 use bytes::{Bytes, BytesMut};
 use log::{debug, error, warn};
 
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpStream;
 use tokio::select;
 use tokio::sync::mpsc;
 
@@ -15,7 +13,7 @@ use crate::tasks::task_hub::HubMsg;
 use crate::protocol::packet::Disconnect;
 use crate::protocol::packet::PingResp;
 use crate::protocol::packet::{read_from_network, ConnectReturnCode, Packet};
-use crate::protocol::Protocol;
+use crate::protocol::{NetworkProtocol, Protocol};
 use crate::tasks::Senders;
 pub use data::*;
 
@@ -33,6 +31,7 @@ pub struct TaskNetwork {
     rx_hub_network_command: mpsc::Receiver<HubNetworkCommand>,
     state: NetworkState,
     version: Protocol,
+    network_protocol: NetworkProtocol,
 }
 
 /// 一旦断开就不再连接，交由hub去维护后续的连接
@@ -45,6 +44,7 @@ impl TaskNetwork {
         connect_packet: Bytes,
         rx_hub_network_command: mpsc::Receiver<HubNetworkCommand>,
         version: Protocol,
+        network_protocol: NetworkProtocol,
     ) -> Self {
         Self {
             addr,
@@ -55,6 +55,7 @@ impl TaskNetwork {
             connect_packet,
             rx_hub_network_command,
             version,
+            network_protocol,
         }
     }
     pub fn run(mut self) {
@@ -109,7 +110,7 @@ impl TaskNetwork {
     }
     async fn run_connected(
         &mut self,
-        stream: &mut TcpStream,
+        stream: &mut Stream,
         buf: &mut BytesMut,
     ) -> Result<(), NetworkTasksError> {
         loop {
@@ -132,10 +133,7 @@ impl TaskNetwork {
             }
         }
     }
-    async fn run_to_disconnected(
-        &mut self,
-        stream: &mut TcpStream,
-    ) -> Result<(), NetworkTasksError> {
+    async fn run_to_disconnected(&mut self, stream: &mut Stream) -> Result<(), NetworkTasksError> {
         stream
             .write_all(Disconnect::new(self.version).data().as_ref())
             .await?;
@@ -144,21 +142,22 @@ impl TaskNetwork {
     }
 
     ///
-    async fn run_to_connect(&mut self, buf: &mut BytesMut) -> Result<TcpStream, ToConnectError> {
-        let mut stream = TcpStream::connect((self.addr.as_str(), self.port)).await?;
+    async fn run_to_connect(&mut self, buf: &mut BytesMut) -> Result<Stream, ToConnectError> {
+        let mut stream = Stream::init(self.network_protocol.clone(), &self.addr, self.port).await?;
+        // let mut stream = TcpStream::connect((self.addr.as_str(), self.port)).await?;
         let session_present = self._run_to_connect(&mut stream, buf).await?;
         self.senders
             .tx_hub_network_event
             .send(NetworkEvent::Connected(session_present))
             .await?;
         self.state = NetworkState::Connected;
-        return Ok(stream);
+        return Ok(stream.into());
     }
 
     /// 连接到broker
     async fn _run_to_connect(
         &mut self,
-        stream: &mut TcpStream,
+        stream: &mut Stream,
         buf: &mut BytesMut,
     ) -> Result<bool, ToConnectError> {
         stream.write_all(self.connect_packet.as_ref()).await?;
@@ -263,7 +262,7 @@ impl TaskNetwork {
     }
     async fn deal_inner_msg(
         &mut self,
-        stream: &mut TcpStream,
+        stream: &mut Stream,
         msg: DataWaitingToBeSend,
     ) -> Result<(), NetworkTasksError> {
         let _other_msg: bool = false;

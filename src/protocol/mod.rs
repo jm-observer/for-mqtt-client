@@ -1,5 +1,6 @@
 use crate::protocol::packet::FixedHeaderError;
 use crate::tasks::TaskHub;
+use crate::tls::TlsConfig;
 use crate::Client;
 use packet::connect::will::LastWill;
 use std::sync::Arc;
@@ -32,6 +33,8 @@ pub struct MqttOptions {
 
     /// 是否自动重连
     pub(crate) auto_reconnect: bool,
+
+    pub(crate) network_protocol: NetworkProtocol,
 }
 
 impl MqttOptions {
@@ -52,12 +55,18 @@ impl MqttOptions {
             max_outgoing_packet_size: 10 * 1024,
             last_will: None,
             auto_reconnect: false,
+            network_protocol: Default::default(),
         }
     }
     /// 设置为自动重连，会默认设置clean_session=false
-    pub fn auto_reconnect(&mut self) -> &mut Self {
+    pub fn auto_reconnect(mut self) -> Self {
         self.auto_reconnect = true;
         self.set_clean_session(false);
+        self
+    }
+
+    pub fn set_tls(mut self, config: TlsConfig) -> Self {
+        self.network_protocol = NetworkProtocol::Tls(config);
         self
     }
 
@@ -77,7 +86,7 @@ impl MqttOptions {
 
     /// Set number of seconds after which client should ping the broker
     /// if there is no other data exchange
-    pub fn set_keep_alive(&mut self, duration: u16) -> &mut Self {
+    pub fn set_keep_alive(mut self, duration: u16) -> Self {
         assert!(duration >= 5, "Keep alives should be >= 5 secs");
         self.keep_alive = duration;
         self
@@ -364,51 +373,6 @@ fn property(num: u8) -> Result<PropertyType, PacketParseError> {
     Ok(property)
 }
 
-/// Checks if the stream has enough bytes to frame a packet and returns fixed header
-/// only if a packet can be framed with existing bytes in the `stream`.
-/// The passed stream doesn't modify parent stream's cursor. If this function
-/// returned an error, next `check` on the same parent stream is forced start
-/// with cursor at 0 again (Iter is owned. Only Iter's cursor is changed internally)
-// pub fn check(stream: Iter<u8>, max_packet_size: usize) -> Result<FixedHeader, PacketParseError> {
-//     // Create fixed header if there are enough bytes in the stream
-//     // to frame full packet
-//     let stream_len = stream.len();
-//     let fixed_header = parse_fixed_header(stream)?;
-//
-//     // Don't let rogue connections attack with huge payloads.
-//     // Disconnect them before reading all that data
-//     if fixed_header.remaining_len > max_packet_size {
-//         return Err(PacketParseError::PayloadSizeLimitExceeded(
-//             fixed_header.remaining_len,
-//         ));
-//     }
-//
-//     // If the current call fails due to insufficient bytes in the stream,
-//     // after calculating remaining length, we extend the stream
-//     let frame_length = fixed_header.frame_length();
-//     if stream_len < frame_length {
-//         return Err(PacketParseError::InsufficientBytes(
-//             frame_length - stream_len,
-//         ));
-//     }
-//
-//     Ok(fixed_header)
-// }
-
-/// Parses fixed header
-// fn parse_fixed_header(mut stream: Iter<u8>) -> Result<FixedHeader, PacketParseError> {
-//     // At least 2 bytes are necessary to frame a packet
-//     let stream_len = stream.len();
-//     if stream_len < 2 {
-//         return Err(PacketParseError::InsufficientBytes(2 - stream_len));
-//     }
-//
-//     let byte1 = stream.next().unwrap();
-//     let (len_len, len) = length(stream)?;
-//
-//     Ok(FixedHeader::new(*byte1, len_len, len))
-// }
-
 /// Return number of remaining length bytes required for encoding length
 fn len_len(len: usize) -> usize {
     if len >= 2_097_152 {
@@ -422,18 +386,14 @@ fn len_len(len: usize) -> usize {
     }
 }
 
-// fn len_variable_integer(stream: Iter<u8>) -> Result<(usize, u32), PacketParseError> {
-//     let mut len = 0;
-//     let mut val = [0u8; 4];
-//     for byte in stream {
-//         val[len] = *byte;
-//         len += 1;
-//         if len > 4 {
-//             return Err(PacketParseError::MalformedRemainingLength);
-//         }
-//         if *byte >= 0x80 {
-//             continue;
-//         }
-//     }
-//     Ok((len, u32::from_be_bytes(val)))
-// }
+#[derive(Debug, Clone)]
+pub enum NetworkProtocol {
+    Tcp,
+    Tls(TlsConfig), // Quic
+}
+
+impl Default for NetworkProtocol {
+    fn default() -> Self {
+        Self::Tcp
+    }
+}

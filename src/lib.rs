@@ -2,6 +2,7 @@
 pub mod datas;
 pub mod protocol;
 mod tasks;
+pub mod tls;
 pub mod traits;
 pub mod utils;
 

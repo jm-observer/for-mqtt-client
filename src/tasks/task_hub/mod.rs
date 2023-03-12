@@ -224,6 +224,7 @@ impl TaskHub {
                 Connect::new(&self.options, self.protocol).unwrap(),
                 rx_hub_network_command,
                 self.protocol.clone(),
+                self.options.network_protocol.clone(),
             )
             .run();
             debug!("try to connect");
