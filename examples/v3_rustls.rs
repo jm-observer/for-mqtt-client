@@ -23,7 +23,7 @@ async fn main() -> Result<()> {
 
     let config =
         TlsConfig::default().set_server_ca_pem_file("resources/broker.emqx.io-ca.crt".into());
-    let options = MqttOptions::new("abc111sfew".to_string(), "54.87.92.106".to_string(), 8883)
+    let options = MqttOptions::new("abc111sfew".to_string(), "54.87.92.106".to_string(), 8883)?
         .set_keep_alive(30)
         .auto_reconnect()
         .set_tls(config);

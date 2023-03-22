@@ -1,6 +1,5 @@
 mod unsubscribe;
 
-use crate::datas::id::Id;
 use crate::protocol::packet::{write_mqtt_bytes, write_mqtt_string, write_remaining_length};
 use crate::protocol::packet::{RetainForwardRule, Subscribe};
 use crate::protocol::PropertyType;
@@ -11,7 +10,7 @@ use std::marker::PhantomData;
 pub use unsubscribe::*;
 
 pub struct SubscribeBuilder<T: Protocol> {
-    pub trace_id: Id,
+    pub trace_id: u32,
     pub id: Option<SubscribeId>,
     pub user_properties: Vec<(String, String)>,
     pub filters: Vec<FilterBuilder<T>>,
@@ -29,10 +28,10 @@ impl SubscribeBuilder<ProtocolV5> {
         self.user_properties.push((key, val));
         self
     }
-    pub fn set_id(&mut self, id: SubscribeId) -> &mut Self {
-        self.id = Some(id);
-        self
-    }
+    // pub fn set_id(&mut self, id: SubscribeId) -> &mut Self {
+    //     self.id = Some(id);
+    //     self
+    // }
 }
 
 pub struct SubscribeId {
@@ -73,9 +72,9 @@ impl<T: Protocol> FilterBuilder<T> {
         }
     }
 
-    pub fn build(self) -> SubscribeBuilder<T> {
+    pub fn build(self, trace_id: u32) -> SubscribeBuilder<T> {
         SubscribeBuilder {
-            trace_id: Default::default(),
+            trace_id,
             id: None,
             user_properties: vec![],
             filters: vec![self],
@@ -133,7 +132,7 @@ impl<T: Protocol> From<SubscribeBuilder<T>> for TraceSubscribe {
             }
         };
         TraceSubscribe {
-            id: trace_id.0,
+            id: trace_id,
             subscribe,
         }
     }

@@ -1,5 +1,3 @@
-use crate::datas::id::Id;
-
 use crate::protocol::packet::write_mqtt_string;
 use crate::protocol::packet::Unsubscribe;
 use crate::protocol::PropertyType;
@@ -9,7 +7,7 @@ use bytes::{BufMut, Bytes, BytesMut};
 use std::marker::PhantomData;
 
 pub struct UnsubscribeBuilder<T: Protocol> {
-    pub trace_id: Id,
+    pub trace_id: u32,
     pub user_properties: Vec<(String, String)>,
     pub filters: Vec<UnsubscribeFilterBuilder<T>>,
 }
@@ -41,9 +39,9 @@ impl<T: Protocol> UnsubscribeFilterBuilder<T> {
         }
     }
 
-    pub fn build(self) -> UnsubscribeBuilder<T> {
+    pub fn build(self, trace_id: u32) -> UnsubscribeBuilder<T> {
         UnsubscribeBuilder {
-            trace_id: Default::default(),
+            trace_id,
             user_properties: vec![],
             filters: vec![self],
         }
@@ -80,7 +78,7 @@ impl<T: Protocol> From<UnsubscribeBuilder<T>> for TraceUnubscribe {
             }
         };
         TraceUnubscribe {
-            id: trace_id.0,
+            id: trace_id,
             unsubscribe,
         }
     }

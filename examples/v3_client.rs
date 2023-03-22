@@ -20,11 +20,13 @@ async fn main() -> Result<()> {
         .log_to_stdout()
         .start();
     let mut options =
-        MqttOptions::new("abc111sfew".to_string(), "broker.emqx.io".to_string(), 1883);
-    options.set_keep_alive(30);
-    options.auto_reconnect();
+        MqttOptions::new("abc111sfew".to_string(), "broker.emqx.io".to_string(), 1883)?;
 
-    let _client = options.connect_to_v4().await;
+    let _client = options
+        .set_keep_alive(30)
+        .auto_reconnect()
+        .connect_to_v4()
+        .await;
     let mut event_rx = _client.init_receiver();
     spawn(async move {
         while let Ok(event) = event_rx.recv().await {

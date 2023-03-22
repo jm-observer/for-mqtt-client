@@ -82,6 +82,8 @@ pub enum HubError {
     PacketIdErr(String),
     #[error("ViolenceDisconnectAndDrop")]
     ViolenceDisconnectAndDrop,
+    #[error("Other {0}")]
+    Other(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -90,6 +92,8 @@ pub enum HubToConnectError {
     ChannelAbnormal,
     #[error("ViolenceDisconnectAndDrop")]
     ViolenceDisconnectAndDrop,
+    #[error("Other {0}")]
+    Other(String),
 }
 
 impl From<HubToConnectError> for HubError {
@@ -97,6 +101,7 @@ impl From<HubToConnectError> for HubError {
         match value {
             HubToConnectError::ChannelAbnormal => HubError::ChannelAbnormal,
             HubToConnectError::ViolenceDisconnectAndDrop => HubError::ViolenceDisconnectAndDrop,
+            HubToConnectError::Other(err) => HubError::Other(err),
         }
     }
 }

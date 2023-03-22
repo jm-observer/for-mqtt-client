@@ -95,16 +95,17 @@ impl ClientData {
         payload: Arc<Bytes>,
         retain: bool,
         protocol: Protocol,
+        id: u32,
     ) -> Self {
         match qos {
             QoS::AtMostOnce => {
-                Self::PublishQoS0(TracePublishQos::init(topic, payload, retain, protocol))
+                Self::PublishQoS0(TracePublishQos::init(topic, payload, retain, protocol, id))
             }
             QoS::AtLeastOnce => {
-                Self::PublishQoS1(TracePublishQos::init(topic, payload, retain, protocol))
+                Self::PublishQoS1(TracePublishQos::init(topic, payload, retain, protocol, id))
             }
             QoS::ExactlyOnce => {
-                Self::PublishQoS2(TracePublishQos::init(topic, payload, retain, protocol))
+                Self::PublishQoS2(TracePublishQos::init(topic, payload, retain, protocol, id))
             }
         }
     }

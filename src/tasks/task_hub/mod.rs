@@ -221,7 +221,8 @@ impl TaskHub {
                 port,
                 senders.clone(),
                 rx_network_data,
-                Connect::new(&self.options, self.protocol).unwrap(),
+                Connect::new(&self.options, self.protocol)
+                    .map_err(|x| HubToConnectError::Other(x.to_string()))?,
                 rx_hub_network_command,
                 self.protocol.clone(),
                 self.options.network_protocol.clone(),

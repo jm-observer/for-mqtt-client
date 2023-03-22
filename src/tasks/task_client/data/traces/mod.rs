@@ -83,9 +83,15 @@ pub struct TracePublishQos<T> {
 // }
 
 impl<T> TracePublishQos<T> {
-    pub fn init(topic: Arc<String>, payload: Arc<Bytes>, retain: bool, protocol: Protocol) -> Self {
+    pub fn init(
+        topic: Arc<String>,
+        payload: Arc<Bytes>,
+        retain: bool,
+        protocol: Protocol,
+        id: u32,
+    ) -> Self {
         Self {
-            id: Id::id(),
+            id,
             packet_id: 0,
             topic,
             qos: PhantomData,

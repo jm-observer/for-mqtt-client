@@ -2,6 +2,7 @@ use crate::protocol::packet::FixedHeaderError;
 use crate::tasks::TaskHub;
 use crate::tls::TlsConfig;
 use crate::Client;
+use anyhow::{bail, Result};
 use packet::connect::will::LastWill;
 use std::sync::Arc;
 
@@ -38,13 +39,17 @@ pub struct MqttOptions {
 }
 
 impl MqttOptions {
-    pub fn new<S: Into<Arc<String>>, T: Into<String>>(id: S, host: T, port: u16) -> MqttOptions {
+    pub fn new<S: Into<Arc<String>>, T: Into<String>>(
+        id: S,
+        host: T,
+        port: u16,
+    ) -> Result<MqttOptions> {
         let id = id.into();
         if id.starts_with(' ') || id.is_empty() {
-            panic!("Invalid client id");
+            bail!("Invalid client id");
         }
 
-        MqttOptions {
+        Ok(MqttOptions {
             broker_addr: host.into(),
             port,
             keep_alive: 60,
@@ -56,7 +61,7 @@ impl MqttOptions {
             last_will: None,
             auto_reconnect: false,
             network_protocol: Default::default(),
-        }
+        })
     }
     /// 设置为自动重连，会默认设置clean_session=false
     pub fn auto_reconnect(mut self) -> Self {
