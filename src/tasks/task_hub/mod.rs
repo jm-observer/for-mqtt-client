@@ -123,9 +123,13 @@ impl TaskHub {
                             .tx_hub_network_command
                             .send(HubNetworkCommand::Disconnect)
                             .await?;
-                        self.state = HubState::Disconnected;
                     } else {
                         return Err(HubError::StateErr(format!("senders should not be none")));
+                    }
+                    if self.options.auto_reconnect {
+                        self.state = HubState::ToConnect;
+                    } else {
+                        self.state = HubState::Disconnected;
                     }
                 }
                 HubState::Disconnected => return Ok(()),
@@ -311,6 +315,8 @@ impl TaskHub {
             HubMsg::PingFail => {
                 // 需要再看看文档，看如何处理
                 self.state = HubState::ToDisconnect(ToDisconnectReason::PingFail);
+                self.tx_to_user
+                    .send(MqttEvent::ConnectedErr("ping fail".to_string()))?;
             }
             HubMsg::KeepAlive(keep_alive) => {
                 if keep_alive.latest() {
