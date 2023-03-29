@@ -86,7 +86,14 @@ pub fn read_from_network(
     version: Protocol,
 ) -> Result<Packet, PacketParseError> {
     let fixed_header = match parse_fixed_header(stream.iter()) {
-        Ok(fixed_header) => fixed_header,
+        Ok(fixed_header) => {
+            if fixed_header.frame_length() > stream.len() {
+                error!("fixed_header.frame_length() > stream.len()");
+                let _ = stream.split_to(stream.len());
+                return Err(FixedHeaderError::MalformedRemainingLength.into());
+            }
+            fixed_header
+        }
         Err(err) => {
             if err.to_discard() {
                 // discard
