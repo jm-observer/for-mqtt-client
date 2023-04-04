@@ -25,7 +25,7 @@ pub use connect::*;
 pub use disconnect::*;
 pub use ping::*;
 
-use log::error;
+use log::{debug, error};
 use std::slice::Iter;
 
 /// Error during serialization and deserialization
@@ -85,11 +85,12 @@ pub fn read_from_network(
     stream: &mut BytesMut,
     version: Protocol,
 ) -> Result<Packet, PacketParseError> {
-    let fixed_header = match parse_fixed_header(stream.iter()) {
+    let fixed_header = match parse_fixed_header_by_slice(stream.as_ref()) {
         Ok(fixed_header) => {
             if fixed_header.frame_length() > stream.len() {
-                error!("fixed_header.frame_length() > stream.len()");
-                let _ = stream.split_to(stream.len());
+                // 等待后续的数据
+                debug!("{} > {}", fixed_header.frame_length(), stream.len());
+                // let _ = stream.split_to(stream.len());
                 return Err(FixedHeaderError::MalformedRemainingLength.into());
             }
             fixed_header
@@ -140,6 +141,16 @@ pub fn parse_fixed_header(mut stream: Iter<u8>) -> Result<FixedHeader, FixedHead
     let (len_len, len) = length(stream)?;
 
     Ok(FixedHeader::new(*byte1, len_len, len))
+}
+pub fn parse_fixed_header_by_slice(stream: &[u8]) -> Result<FixedHeader, FixedHeaderError> {
+    let stream_len = stream.len();
+    if stream_len < 2 {
+        return Err(FixedHeaderError::InsufficientBytes(2 - stream_len));
+    }
+    let byte1 = stream[0];
+    let (len_len, len) = length(stream[1..].iter())?;
+
+    Ok(FixedHeader::new(byte1, len_len, len))
 }
 
 /// Parses variable byte integer in the stream and returns the length

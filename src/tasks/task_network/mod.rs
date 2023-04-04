@@ -250,7 +250,8 @@ impl TaskNetwork {
                     };
                 }
                 Err(err) => {
-                    error!("{:?}", err);
+                    warn!("{:?}", err);
+                    return Ok(());
                 }
             }
             if buf.len() >= 2 {

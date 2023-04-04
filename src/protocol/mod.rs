@@ -331,14 +331,19 @@ pub enum PacketParseError {
     PayloadRequired,
     #[error("Topic is not UTF-8")]
     TopicNotUtf8,
+    /// 包中相关长度值与剩余数据长度不匹配——
     #[error("Promised boundary crossed: {0}")]
     BoundaryCrossed(usize),
+    /// 无法用约定规则解析出包
     #[error("Malformed packet")]
     MalformedPacket,
     #[error("A Subscribe packet must contain atleast one filter")]
     EmptySubscription,
+    /// 剩余长度使用了一种可变长度的结构来编码，这种结构使用单一字节表示0-127的值。
+    /// 无法用约定的规则解析剩余长度——断开
     #[error("At least {0} more bytes required to frame packet")]
     InsufficientBytes(usize),
+    /// 包剩余长度大于剩余长度——需要等待其他数据
     #[error("Malformed remaining length")]
     MalformedRemainingLength,
 }
