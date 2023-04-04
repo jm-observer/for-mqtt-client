@@ -126,11 +126,23 @@ impl TaskHub {
                     } else {
                         return Err(HubError::StateErr(format!("senders should not be none")));
                     }
-                    if self.options.auto_reconnect {
-                        self.state = HubState::ToConnect;
-                    } else {
-                        self.state = HubState::Disconnected;
+                    match _reason {
+                        ToDisconnectReason::PingFail => {
+                            if self.options.auto_reconnect {
+                                self.state = HubState::ToConnect;
+                            } else {
+                                self.state = HubState::Disconnected;
+                            }
+                        }
+                        ToDisconnectReason::ClientCommand => {
+                            self.state = HubState::Disconnected;
+                        }
                     }
+                    // if self.options.auto_reconnect {
+                    //     self.state = HubState::ToConnect;
+                    // } else {
+                    //     self.state = HubState::Disconnected;
+                    // }
                 }
                 HubState::Disconnected => return Ok(()),
             }

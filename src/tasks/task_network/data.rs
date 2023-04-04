@@ -50,6 +50,7 @@ pub enum NetworkEvent {
     ConnectFail(ToConnectError),
     /// 中间突然断开，network task发送后即drop
     ConnectedErr(String),
+    /// broker send disconnect packet
     BrokerDisconnect(Disconnect),
 }
 
@@ -95,8 +96,6 @@ pub enum NetworkTasksError {
     #[error("Connect fail: {0}")]
     ConnectFail(ToConnectError),
 }
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ChannelAbnormal;
 
 // #[derive(Debug, Clone, PartialEq, Eq)]
 // pub enum ToConnectResult {
@@ -146,16 +145,16 @@ impl From<ToConnectError> for NetworkTasksError {
     }
 }
 
-impl From<ChannelAbnormal> for NetworkTasksError {
-    fn from(_err: ChannelAbnormal) -> Self {
-        Self::ChannelAbnormal
-    }
-}
-impl From<ChannelAbnormal> for ToConnectError {
-    fn from(_err: ChannelAbnormal) -> Self {
-        Self::ChannelAbnormal
-    }
-}
+// impl From<ChannelAbnormal> for NetworkTasksError {
+//     fn from(_err: ChannelAbnormal) -> Self {
+//         Self::ChannelAbnormal
+//     }
+// }
+// impl From<ChannelAbnormal> for ToConnectError {
+//     fn from(_err: ChannelAbnormal) -> Self {
+//         Self::ChannelAbnormal
+//     }
+// }
 impl<T> From<mpsc::error::SendError<T>> for ToConnectError {
     fn from(_: mpsc::error::SendError<T>) -> Self {
         Self::ChannelAbnormal
