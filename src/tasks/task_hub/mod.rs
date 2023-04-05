@@ -137,12 +137,14 @@ impl TaskHub {
                         ToDisconnectReason::ClientCommand => {
                             self.state = HubState::Disconnected;
                         }
+                        ToDisconnectReason::NetworkErr(_) => {
+                            if self.options.auto_reconnect {
+                                self.state = HubState::ToConnect;
+                            } else {
+                                self.state = HubState::Disconnected;
+                            }
+                        }
                     }
-                    // if self.options.auto_reconnect {
-                    //     self.state = HubState::ToConnect;
-                    // } else {
-                    //     self.state = HubState::Disconnected;
-                    // }
                 }
                 HubState::Disconnected => return Ok(()),
             }
@@ -185,12 +187,13 @@ impl TaskHub {
         debug!("update_state: {:?}", state);
         match state {
             NetworkEvent::ConnectedErr(msg) => {
-                self.tx_to_user.send(MqttEvent::ConnectedErr(msg))?;
-                if self.options.auto_reconnect {
-                    self.state = HubState::ToConnect;
-                } else {
-                    self.state = HubState::Disconnected;
-                }
+                self.tx_to_user.send(MqttEvent::ConnectedErr(msg.clone()))?;
+                self.state = HubState::ToDisconnect(ToDisconnectReason::NetworkErr(msg));
+                // if self.options.auto_reconnect {
+                //     self.state = HubState::ToConnect;
+                // } else {
+                //     self.state = HubState::Disconnected;
+                // }
             }
             NetworkEvent::Connected(_) | NetworkEvent::ConnectFail(_) => {
                 warn!("should not rx NetworkEvent::Disconnected | Connected | ConnectFail when connected")
@@ -219,7 +222,13 @@ impl TaskHub {
         )>,
         HubToConnectError,
     > {
+        let mut first = true;
         loop {
+            if !first {
+                sleep(Duration::from_secs(30)).await;
+            } else {
+                first = false;
+            }
             self.try_deal_client_command_when_to_connect().await?;
             if !self.state.is_to_connect() {
                 return Ok(None);
@@ -265,7 +274,7 @@ impl TaskHub {
                     warn!(
                         "should not to rx NetworkEvent::Disconnect({}) when to_connect",
                         reason
-                    )
+                    );
                 }
                 NetworkEvent::ConnectFail(reason) => {
                     info!("connect fail: {:?}", reason);

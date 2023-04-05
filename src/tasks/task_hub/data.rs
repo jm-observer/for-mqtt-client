@@ -69,6 +69,7 @@ impl Default for HubState {
 #[derive(Debug)]
 pub enum ToDisconnectReason {
     PingFail,
+    NetworkErr(String),
     ClientCommand,
 }
 
