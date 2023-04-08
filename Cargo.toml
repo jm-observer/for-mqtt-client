@@ -2,7 +2,15 @@
 name = "for-mqtt-client"
 version = "0.2.0"
 edition = "2021"
+description = "mqtt v3/v5 client, only support rustls"
+repository = "https://github.com/jm-observer/for-mqtt-client"
 
+license-file = "LICENSE"
+readme = "README.md"
+
+include = [
+    "LICENSE", "Cargo.toml", "README.md", "src/**/*.rs"
+]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
