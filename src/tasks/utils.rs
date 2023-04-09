@@ -2,7 +2,7 @@ use crate::tasks::Senders;
 use crate::traits::packet_dup::PacketDup;
 use crate::traits::packet_rel::PacketRel;
 use bytes::Bytes;
-use for_event_bus::worker::{IdentityOfRx, IdentityOfSimple};
+use for_event_bus::worker::IdentityOfSimple;
 use for_event_bus::BusError;
 use log::debug;
 use std::sync::Arc;

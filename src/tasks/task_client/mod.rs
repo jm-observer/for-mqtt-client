@@ -7,15 +7,15 @@ use crate::{
     TraceUnubscribe, UnsubscribeFilterBuilder,
 };
 use bytes::Bytes;
-use for_event_bus::worker::{IdentityOfSimple, IdentityOfTx, Worker};
+use for_event_bus::worker::{IdentityOfSimple, IdentityOfTx};
 use for_event_bus::{BusError, CopyOfBus};
 use std::sync::Arc;
 
 pub mod data;
 
+#[derive(Clone)]
 pub struct Client {
     protocol: Protocol,
-    // bus: CopyOfBus,
     identity_tx: IdentityOfTx,
 }
 
@@ -29,12 +29,6 @@ pub struct ClientRx {
 impl ClientRx {
     pub fn identity_mut(&mut self) -> &mut IdentityOfSimple<MqttEvent> {
         &mut self.identity
-    }
-}
-
-impl Worker for Client {
-    fn identity_tx(&self) -> &IdentityOfTx {
-        &self.identity_tx
     }
 }
 

@@ -6,7 +6,7 @@ pub use unacknowledged::*;
 use crate::tasks::task_network::{HubNetworkCommand, NetworkEvent, TaskNetwork};
 use crate::tasks::Senders;
 use anyhow::Result;
-use for_event_bus::worker::{IdentityOfRx, IdentityOfSimple, IdentityOfTx, Worker};
+use for_event_bus::worker::{IdentityOfRx, IdentityOfSimple, IdentityOfTx};
 use for_event_bus::{Bus, CopyOfBus, Event};
 use log::{debug, error, info, warn};
 use ringbuf::{Consumer, Producer};
@@ -37,7 +37,6 @@ pub struct TaskHub {
     options: MqttOptions,
     state: HubState,
     bus: CopyOfBus,
-    identity_tx: IdentityOfTx,
     identity: IdentityOfRx,
     identity_command: IdentityOfSimple<ClientCommand>,
     identity_network: IdentityOfSimple<NetworkEvent>,
@@ -49,12 +48,6 @@ pub struct TaskHub {
     // rx_client_command: mpsc::Receiver<ClientCommand>,
 }
 
-impl Worker for TaskHub {
-    fn identity_tx(&self) -> &IdentityOfTx {
-        todo!()
-    }
-}
-
 impl TaskHub {
     pub async fn connect(
         options: MqttOptions,
@@ -64,7 +57,7 @@ impl TaskHub {
         // let (tx_client_command, rx_client_command) = mpsc::channel(1024);
         // let (tx_to_user, _) = channel(1024);
         let bus = Bus::init();
-        let (identity_tx, identity) = bus.login().await?;
+        let identity = bus.login().await?;
         identity.subscribe::<HubMsg>()?;
         identity.subscribe::<ClientData>()?;
         let identity_command = bus.simple_login().await?;
@@ -76,6 +69,7 @@ impl TaskHub {
         //     tx_to_user.clone(),
         //     options.protocol,
         // );
+
         let mut hub = Self {
             options,
             state: HubState::default(),
@@ -85,7 +79,6 @@ impl TaskHub {
             protocol,
             bus,
             identity,
-            identity_tx,
             identity_command,
             identity_network,
         };
@@ -219,9 +212,6 @@ impl TaskHub {
                 warn!("should not rx NetworkEvent::Disconnected | Connected | ConnectFail when connected")
             }
             NetworkEvent::BrokerDisconnect(packet) => {
-                // todo
-                // self.tx_to_user
-                //     .send(
                 self.identity
                     .dispatch_event(MqttEvent::ConnectedErr(format!("{:?}", packet)))?;
                 if self.options.auto_reconnect {
@@ -271,7 +261,7 @@ impl TaskHub {
                 NetworkEvent::Connected(session_present) => {
                     debug!("Connected");
                     self.state = HubState::Connected;
-                    self.init_keep_alive_check(&self.identity_tx);
+                    self.init_keep_alive_check();
 
                     self.identity
                         .dispatch_event(MqttEvent::ConnectSuccess(*session_present))?;
@@ -336,7 +326,7 @@ impl TaskHub {
                 };
                 if obj.acknowledge() {
                     self.client_data.remove(index);
-                    self.init_keep_alive_check(&self.identity_tx);
+                    self.init_keep_alive_check();
                     a.push(*id)
                         .map_err(|_x| HubError::PacketIdErr("RecoverId Err".to_string()))?;
                 } else {
@@ -344,7 +334,7 @@ impl TaskHub {
                 }
             }
             HubMsg::PingSuccess => {
-                self.init_keep_alive_check(&self.identity_tx);
+                self.init_keep_alive_check();
             }
             HubMsg::PingFail => {
                 // 需要再看看文档，看如何处理
@@ -416,8 +406,7 @@ impl TaskHub {
                 TaskUnsubscribe::init(self.bus.clone(), trace_unsubscribe.clone()).await?;
             }
             ClientData::PublishQoS0(packet) => {
-                TaskPublishQos0::init(Senders::init(self.identity_tx.clone()), packet.clone())
-                    .await;
+                TaskPublishQos0::init(Senders::init(self.identity.tx()), packet.clone()).await;
             }
             ClientData::PublishQoS1(mut packet) => {
                 packet.set_packet_id(b).await?;
@@ -450,12 +439,12 @@ impl TaskHub {
     }
 
     /// 初始化一个keep alive的计时
-    fn init_keep_alive_check(&self, senders: &IdentityOfTx) {
+    fn init_keep_alive_check(&self) {
         debug!("init_keep_alive_check");
         init_keep_alive_check(
             KeepAliveTime::default(),
             self.options.keep_alive(),
-            senders.clone(),
+            self.identity.tx(),
         );
     }
 

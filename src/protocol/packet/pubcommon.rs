@@ -67,10 +67,10 @@ impl<Ty: Common> PubCommon<Ty> {
     pub fn set_reason_string(&mut self, reason_string: String) -> Result<()> {
         match self {
             PubCommon::V4 { .. } => {
-                bail!("todo")
+                bail!("should not be reached")
             }
             PubCommon::V5 { .. } => {
-                bail!("todo")
+                bail!("should not be reached")
             }
             PubCommon::V5WriteMode {
                 had_reason_string,
@@ -78,7 +78,7 @@ impl<Ty: Common> PubCommon<Ty> {
                 ..
             } => {
                 if *had_reason_string == true {
-                    bail!("todo");
+                    bail!("should not be reached");
                 }
                 properties.put_u8(PropertyType::ReasonString as u8);
                 write_mqtt_string(properties, reason_string.as_str());
@@ -90,10 +90,10 @@ impl<Ty: Common> PubCommon<Ty> {
     pub fn add_user_property(&mut self, key: String, val: String) -> Result<()> {
         match self {
             PubCommon::V4 { .. } => {
-                bail!("todo")
+                bail!("should not be reached")
             }
             PubCommon::V5 { .. } => {
-                bail!("todo")
+                bail!("should not be reached")
             }
             PubCommon::V5WriteMode {
                 had_user_properties,

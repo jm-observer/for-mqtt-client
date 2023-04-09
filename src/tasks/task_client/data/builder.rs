@@ -1,10 +1,9 @@
 mod unsubscribe;
 
-use crate::protocol::packet::{write_mqtt_bytes, write_mqtt_string, write_remaining_length};
+use crate::protocol::packet::{write_mqtt_bytes, write_mqtt_string};
 use crate::protocol::packet::{RetainForwardRule, Subscribe};
 use crate::protocol::PropertyType;
 use crate::{Protocol, ProtocolV5, QoS, TraceSubscribe};
-use anyhow::bail;
 use bytes::{BufMut, Bytes, BytesMut};
 use std::marker::PhantomData;
 pub use unsubscribe::*;
@@ -38,18 +37,18 @@ pub struct SubscribeId {
     datas: Bytes,
 }
 
-impl SubscribeId {
-    pub fn new(id: u32) -> anyhow::Result<Self> {
-        if id > 268_435_455u32 && id == 0 {
-            bail!("todo")
-        }
-        let mut buffer = BytesMut::new();
-        write_remaining_length(&mut buffer, id as usize);
-        Ok(Self {
-            datas: buffer.freeze(),
-        })
-    }
-}
+// impl SubscribeId {
+//     pub fn new(id: u32) -> anyhow::Result<Self> {
+//         if id > 268_435_455u32 && id == 0 {
+//             bail!("should not be reached")
+//         }
+//         let mut buffer = BytesMut::new();
+//         write_remaining_length(&mut buffer, id as usize);
+//         Ok(Self {
+//             datas: buffer.freeze(),
+//         })
+//     }
+// }
 
 pub struct FilterBuilder<T: Protocol> {
     path: String,

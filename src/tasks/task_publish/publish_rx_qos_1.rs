@@ -4,7 +4,7 @@ use crate::tasks::task_hub::HubMsg;
 use crate::tasks::utils::CommonErr;
 use crate::tasks::{HubError, Senders};
 use anyhow::Result;
-use for_event_bus::worker::{IdentityOfRx, IdentityOfSimple};
+use for_event_bus::worker::IdentityOfSimple;
 use for_event_bus::CopyOfBus;
 use tokio::spawn;
 
