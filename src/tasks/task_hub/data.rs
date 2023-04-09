@@ -1,3 +1,4 @@
+use for_event_bus::BusError;
 use std::default::Default;
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -77,8 +78,8 @@ pub enum ToDisconnectReason {
 pub enum HubError {
     #[error("channel abnormal")]
     ChannelAbnormal,
-    #[error("StateErr {0}")]
-    StateErr(String),
+    // #[error("StateErr {0}")]
+    // StateErr(String),
     #[error("PacketIdErr {0}")]
     PacketIdErr(String),
     #[error("ViolenceDisconnectAndDrop")]
@@ -106,23 +107,42 @@ impl From<HubToConnectError> for HubError {
         }
     }
 }
+impl From<BusError> for HubError {
+    fn from(value: BusError) -> Self {
+        match value {
+            BusError::ChannelErr => Self::ChannelAbnormal,
+        }
+    }
+}
+
 impl<T> From<broadcast::error::SendError<T>> for HubError {
     fn from(_: broadcast::error::SendError<T>) -> Self {
         Self::ChannelAbnormal
     }
 }
+
 impl<T> From<mpsc::error::SendError<T>> for HubError {
     fn from(_: mpsc::error::SendError<T>) -> Self {
         Self::ChannelAbnormal
     }
 }
+
 impl<T> From<broadcast::error::SendError<T>> for HubToConnectError {
     fn from(_: broadcast::error::SendError<T>) -> Self {
         Self::ChannelAbnormal
     }
 }
+
 impl<T> From<mpsc::error::SendError<T>> for HubToConnectError {
     fn from(_: mpsc::error::SendError<T>) -> Self {
         Self::ChannelAbnormal
+    }
+}
+
+impl From<BusError> for HubToConnectError {
+    fn from(err: BusError) -> Self {
+        match err {
+            BusError::ChannelErr => Self::ChannelAbnormal,
+        }
     }
 }

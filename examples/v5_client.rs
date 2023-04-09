@@ -21,15 +21,15 @@ async fn main() -> Result<()> {
         .start();
     let mut options = MqttOptions::new("abc111".to_string(), "broker.emqx.io1".to_string(), 1883)?;
 
-    let _client = options
+    let (_client, mut client_rx) = options
         .set_keep_alive(30)
         .auto_reconnect()
         .connect_to_v5()
-        .await;
-    let mut event_rx = _client.init_receiver();
+        .await
+        .unwrap();
     spawn(async move {
-        while let Ok(event) = event_rx.recv().await {
-            match event {
+        while let Ok(event) = client_rx.identity_mut().recv().await {
+            match event.as_ref() {
                 MqttEvent::ConnectSuccess(session_present) => {
                     info!("\nConnectSuccess {}\n", session_present);
                 }

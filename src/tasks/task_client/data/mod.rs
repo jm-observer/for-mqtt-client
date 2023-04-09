@@ -11,6 +11,7 @@ use crate::protocol::Protocol;
 use crate::tasks::task_network::ToConnectError;
 use crate::{AtLeastOnce, AtMostOnce, ExactlyOnce, QoS};
 use bytes::Bytes;
+use for_event_bus::BusError;
 use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc};
 
@@ -116,14 +117,26 @@ pub enum ClientErr {
     Disconnected,
     #[error("PayloadTooLong")]
     PayloadTooLong,
+    #[error("ChannelErr")]
+    ChannelErr,
 }
+
 impl<T> From<broadcast::error::SendError<T>> for ClientErr {
     fn from(_: broadcast::error::SendError<T>) -> Self {
         Self::Disconnected
     }
 }
+
 impl<T> From<mpsc::error::SendError<T>> for ClientErr {
     fn from(_: mpsc::error::SendError<T>) -> Self {
         Self::Disconnected
+    }
+}
+
+impl From<BusError> for ClientErr {
+    fn from(err: BusError) -> Self {
+        match err {
+            BusError::ChannelErr => Self::ChannelErr,
+        }
     }
 }

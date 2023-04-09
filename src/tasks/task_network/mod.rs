@@ -1,20 +1,20 @@
 use anyhow::Result;
+use std::sync::Arc;
 
 use bytes::{Bytes, BytesMut};
+use for_event_bus::worker::IdentityOfSimple;
+use for_event_bus::CopyOfBus;
 use log::{debug, error, warn};
-
 use tokio::select;
-use tokio::sync::mpsc;
 
 mod data;
 
-use crate::tasks::task_hub::HubMsg;
+use crate::tasks::task_hub::{HubMsg, HubToConnectError};
 
 use crate::protocol::packet::Disconnect;
 use crate::protocol::packet::PingResp;
 use crate::protocol::packet::{read_from_network, ConnectReturnCode, Packet};
 use crate::protocol::{NetworkProtocol, Protocol};
-use crate::tasks::Senders;
 pub use data::*;
 
 #[derive(Clone, Debug)]
@@ -26,37 +26,43 @@ pub struct TaskNetwork {
     addr: String,
     port: u16,
     connect_packet: Bytes,
-    senders: Senders,
-    rx_data: mpsc::Receiver<DataWaitingToBeSend>,
-    rx_hub_network_command: mpsc::Receiver<HubNetworkCommand>,
     state: NetworkState,
     version: Protocol,
     network_protocol: NetworkProtocol,
+    identity_data: IdentityOfSimple<DataWaitingToBeSend>,
+    identity_command: IdentityOfSimple<HubNetworkCommand>,
 }
 
 /// 一旦断开就不再连接，交由hub去维护后续的连接
 impl TaskNetwork {
-    pub fn init(
+    pub async fn init(
         addr: String,
         port: u16,
-        inner_tx: Senders,
-        rx: mpsc::Receiver<DataWaitingToBeSend>,
+        // inner_tx: Senders,
+        // rx: mpsc::Receiver<DataWaitingToBeSend>,
         connect_packet: Bytes,
-        rx_hub_network_command: mpsc::Receiver<HubNetworkCommand>,
+        // rx_hub_network_command: mpsc::Receiver<HubNetworkCommand>,
         version: Protocol,
         network_protocol: NetworkProtocol,
-    ) -> Self {
-        Self {
+        bus: &CopyOfBus,
+    ) -> Result<Self, HubToConnectError> {
+        let identity_data = bus.simple_login().await?;
+        let identity_command = bus.simple_login().await?;
+        // identity.subscribe::<DataWaitingToBeSend>()?;
+        // identity.subscribe::<HubNetworkCommand>()?;
+        Ok(Self {
             addr,
             port,
-            senders: inner_tx,
-            rx_data: rx,
+            // senders: inner_tx,
+            // rx_data: rx,
             state: NetworkState::ToConnect,
             connect_packet,
-            rx_hub_network_command,
+            // rx_hub_network_command,
             version,
             network_protocol,
-        }
+            identity_data,
+            identity_command,
+        })
     }
     pub fn run(mut self) {
         tokio::spawn(async move {
@@ -65,22 +71,22 @@ impl TaskNetwork {
                 match e {
                     NetworkTasksError::NetworkError(msg) => {
                         let _ = self
-                            .senders
-                            .tx_hub_network_event
-                            .send(NetworkEvent::ConnectedErr(msg))
-                            .await;
+                            .identity_data
+                            .dispatch_event(NetworkEvent::ConnectedErr(msg));
                     }
                     NetworkTasksError::ConnectFail(reason) => {
                         let _ = self
-                            .senders
-                            .tx_hub_network_event
-                            .send(NetworkEvent::ConnectFail(reason))
-                            .await;
+                            .identity_data
+                            .dispatch_event(NetworkEvent::ConnectFail(reason));
                     }
-                    NetworkTasksError::ChannelAbnormal => {}
+                    NetworkTasksError::ChannelAbnormal => {
+                        error!("NetworkTasksError::ChannelAbnormal")
+                    }
                     NetworkTasksError::HubCommandToDisconnect => {
                         warn!("should not be reached")
-                    }
+                    } // NetworkTasksError::BusErr => {
+                      //     error!("NetworkTasksError::BusErr")
+                      // }
                 }
             }
         });
@@ -124,15 +130,30 @@ impl TaskNetwork {
                     }
                     self.deal_connected_network_packet(buf).await?;
                 },
-                val = self.rx_data.recv() => {
-                    self.deal_inner_msg(stream, val.ok_or(NetworkTasksError::ChannelAbnormal)?).await?;
+                val = self.identity_data.recv() => {
+                    self.deal_inner_msg(stream, val?).await?;
                 }
-                command = self.rx_hub_network_command.recv() => {
-                    self.deal_hub_network_command(command.ok_or(NetworkTasksError::ChannelAbnormal)?)?;
+                command = self.identity_command.recv() => {
+                    self.deal_hub_network_command(command?.as_ref())?;
                 }
             }
         }
     }
+
+    // pub async fn recv(&mut self) -> Result<TaskEvent, NetworkTasksError> {
+    //     if let Some(event) = self.identity_data.rx_event_mut().recv().await {
+    //         if let Ok(msg) = event.clone().downcast::<DataWaitingToBeSend>() {
+    //             Ok(TaskEvent::DataWaitingToBeSend(msg))
+    //         } else if let Ok(command) = event.downcast::<HubNetworkCommand>() {
+    //             Ok(TaskEvent::HubNetworkCommand(command))
+    //         } else {
+    //             return Err(NetworkTasksError::BusErr);
+    //         }
+    //     } else {
+    //         Err(NetworkTasksError::ChannelAbnormal)
+    //     }
+    // }
+
     async fn run_to_disconnected(&mut self, stream: &mut Stream) -> Result<(), NetworkTasksError> {
         stream
             .write_all(Disconnect::new(self.version).data().as_ref())
@@ -146,10 +167,8 @@ impl TaskNetwork {
         let mut stream = Stream::init(self.network_protocol.clone(), &self.addr, self.port).await?;
         // let mut stream = TcpStream::connect((self.addr.as_str(), self.port)).await?;
         let session_present = self._run_to_connect(&mut stream, buf).await?;
-        self.senders
-            .tx_hub_network_event
-            .send(NetworkEvent::Connected(session_present))
-            .await?;
+        self.identity_data
+            .dispatch_event(NetworkEvent::Connected(session_present))?;
         self.state = NetworkState::Connected;
         return Ok(stream.into());
     }
@@ -186,10 +205,8 @@ impl TaskNetwork {
                         }
                         Packet::Publish(packet) => {
                             if self
-                                .senders
-                                .tx_hub_msg
-                                .send(HubMsg::RxPublish(packet))
-                                .await
+                                .identity_data
+                                .dispatch_event(HubMsg::RxPublish(packet))
                                 .is_err()
                             {
                                 error!("fail to send Publish");
@@ -197,50 +214,47 @@ impl TaskNetwork {
                             }
                         }
                         Packet::PubAck(packet) => {
-                            if self.senders.broadcast_tx.tx_pub_ack.send(packet).is_err() {
+                            if self.identity_data.dispatch_event(packet).is_err() {
                                 error!("fail to send PubAck");
                                 return Err(NetworkTasksError::ChannelAbnormal);
                             }
                         }
                         Packet::PubRec(packet) => {
-                            if self.senders.broadcast_tx.tx_pub_rec.send(packet).is_err() {
+                            if self.identity_data.dispatch_event(packet).is_err() {
                                 error!("fail to send PubRec");
                                 return Err(NetworkTasksError::ChannelAbnormal);
                             }
                         }
                         Packet::PubRel(packet) => {
-                            if self.senders.broadcast_tx.tx_pub_rel.send(packet).is_err() {
+                            if self.identity_data.dispatch_event(packet).is_err() {
                                 error!("fail to send PubRel");
                                 return Err(NetworkTasksError::ChannelAbnormal);
                             }
                         }
                         Packet::PubComp(packet) => {
-                            if self.senders.broadcast_tx.tx_pub_comp.send(packet).is_err() {
+                            if self.identity_data.dispatch_event(packet).is_err() {
                                 error!("fail to send PubComp");
                                 return Err(NetworkTasksError::ChannelAbnormal);
                             }
                         }
                         Packet::SubAck(packet) => {
-                            if self.senders.broadcast_tx.tx_sub_ack.send(packet).is_err() {
+                            if self.identity_data.dispatch_event(packet).is_err() {
                                 error!("fail to send SubAck");
                                 return Err(NetworkTasksError::ChannelAbnormal);
                             }
                         }
                         Packet::UnsubAck(packet) => {
-                            if self.senders.broadcast_tx.tx_unsub_ack.send(packet).is_err() {
+                            if self.identity_data.dispatch_event(packet).is_err() {
                                 error!("fail to send UnsubAck");
                                 return Err(NetworkTasksError::ChannelAbnormal);
                             }
                         }
                         Packet::PingResp => {
-                            self.senders.broadcast_tx.tx_ping.send(PingResp)?;
+                            self.identity_data.dispatch_event(PingResp)?;
                         }
-                        Packet::Disconnect(packet) => {
-                            self.senders
-                                .tx_hub_network_event
-                                .send(NetworkEvent::BrokerDisconnect(packet))
-                                .await?
-                        }
+                        Packet::Disconnect(packet) => self
+                            .identity_data
+                            .dispatch_event(NetworkEvent::BrokerDisconnect(packet))?,
                         // Packet::Connect(_) => {}
                         // Packet::Subscribe(_) => {}
                         // Packet::Unsubscribe(_) => {}
@@ -264,11 +278,11 @@ impl TaskNetwork {
     async fn deal_inner_msg(
         &mut self,
         stream: &mut Stream,
-        msg: DataWaitingToBeSend,
+        msg: Arc<DataWaitingToBeSend>,
     ) -> Result<(), NetworkTasksError> {
         let _other_msg: bool = false;
         let mut to_send_datas = vec![msg];
-        while let Ok(data) = self.rx_data.try_recv() {
+        while let Ok(Some(data)) = self.identity_data.try_recv() {
             to_send_datas.push(data);
         }
         // todo packet too big?
@@ -276,7 +290,7 @@ impl TaskNetwork {
             stream.write_all(data.data.as_ref()).await?;
         }
         for data in to_send_datas {
-            data.done();
+            data.as_ref().done();
         }
         Ok(())
     }
@@ -295,7 +309,7 @@ impl TaskNetwork {
     // }
     fn deal_hub_network_command(
         &mut self,
-        command: HubNetworkCommand,
+        command: &HubNetworkCommand,
     ) -> Result<(), NetworkTasksError> {
         match command {
             HubNetworkCommand::Disconnect => {

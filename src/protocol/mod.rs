@@ -1,4 +1,5 @@
 use crate::protocol::packet::FixedHeaderError;
+use crate::tasks::task_client::ClientRx;
 use crate::tasks::TaskHub;
 use crate::tls::TlsConfig;
 use crate::Client;
@@ -150,11 +151,11 @@ impl MqttOptions {
         self.credentials.clone()
     }
 
-    pub async fn connect_to_v4(self) -> Client {
-        TaskHub::connect(self, Protocol::V4).await
+    pub async fn connect_to_v4(self) -> Result<(Client, ClientRx)> {
+        Ok(TaskHub::connect(self, Protocol::V4).await?)
     }
-    pub async fn connect_to_v5(self) -> Client {
-        TaskHub::connect(self, Protocol::V5).await
+    pub async fn connect_to_v5(self) -> Result<(Client, ClientRx)> {
+        Ok(TaskHub::connect(self, Protocol::V5).await?)
     }
 }
 

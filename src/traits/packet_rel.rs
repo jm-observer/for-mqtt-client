@@ -3,7 +3,7 @@ use crate::protocol::packet::UnsubAck;
 use crate::protocol::packet::{PubAck, PubComp, PubRec, PubRel};
 use std::fmt::Debug;
 
-pub trait PacketRel: Clone + Debug {
+pub trait PacketRel: Clone + Debug + Send + Sync + 'static {
     fn is_rel(&self, packet_id: u16) -> bool;
 }
 

@@ -2,19 +2,20 @@ use crate::tasks::Senders;
 use crate::traits::packet_dup::PacketDup;
 use crate::traits::packet_rel::PacketRel;
 use bytes::Bytes;
+use for_event_bus::worker::{IdentityOfRx, IdentityOfSimple};
+use for_event_bus::BusError;
 use log::debug;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::broadcast::Receiver;
 use tokio::sync::{broadcast, mpsc, oneshot};
 
 pub async fn complete_to_tx_packet<Ack: PacketRel, T: PacketDup>(
-    rx_ack: &mut Receiver<Ack>,
+    rx_ack: &mut IdentityOfSimple<Ack>,
     packet_id: u16,
     duration: u64,
     tx: &Senders,
     packet: &mut T,
-) -> anyhow::Result<Ack, CommonErr> {
+) -> anyhow::Result<Arc<Ack>, CommonErr> {
     let data = packet.data();
     let mut dup_data = Option::<Arc<Bytes>>::None;
     tx.tx_network_default(data).await?;
@@ -37,9 +38,9 @@ pub async fn complete_to_tx_packet<Ack: PacketRel, T: PacketDup>(
 }
 
 async fn timeout_rx<T: PacketRel>(
-    rx_ack: &mut Receiver<T>,
+    rx_ack: &mut IdentityOfSimple<T>,
     packet_id: u16,
-) -> anyhow::Result<T, CommonErr> {
+) -> anyhow::Result<Arc<T>, CommonErr> {
     loop {
         let msg = rx_ack.recv().await?;
         if msg.is_rel(packet_id) {
@@ -72,6 +73,13 @@ impl From<oneshot::error::RecvError> for CommonErr {
 impl From<broadcast::error::RecvError> for CommonErr {
     fn from(_: broadcast::error::RecvError) -> Self {
         Self::ChannelAbnormal
+    }
+}
+impl From<BusError> for CommonErr {
+    fn from(err: BusError) -> Self {
+        match err {
+            BusError::ChannelErr => Self::ChannelAbnormal,
+        }
     }
 }
 // impl From<Elapsed> for CommonErr {

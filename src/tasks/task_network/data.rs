@@ -13,6 +13,7 @@ use crate::protocol::{NetworkProtocol, PacketParseError, PacketType};
 use crate::tls::rustls::init_rustls;
 use crate::tls::TlsConfig;
 use anyhow::Result;
+use for_event_bus::BusError;
 use tokio::sync::{broadcast, mpsc};
 use tokio_rustls::client::TlsStream;
 
@@ -53,6 +54,12 @@ pub enum NetworkEvent {
     /// broker send disconnect packet
     BrokerDisconnect(Disconnect),
 }
+//
+// #[derive(Debug, Clone)]
+// pub enum TaskEvent {
+//     HubNetworkCommand(Arc<HubNetworkCommand>),
+//     DataWaitingToBeSend(Arc<DataWaitingToBeSend>),
+// }
 
 #[derive(Debug)]
 pub enum HubNetworkCommand {
@@ -69,8 +76,8 @@ impl DataWaitingToBeSend {
     pub fn init(data: Arc<Bytes>, receipter: Option<Receipter>) -> Self {
         Self { data, receipter }
     }
-    pub fn done(self) {
-        if let Some(receipter) = self.receipter {
+    pub fn done(&self) {
+        if let Some(receipter) = &self.receipter {
             receipter.done();
         }
     }
@@ -95,6 +102,8 @@ pub enum NetworkTasksError {
     HubCommandToDisconnect,
     #[error("Connect fail: {0}")]
     ConnectFail(ToConnectError),
+    // #[error("BusErr")]
+    // BusErr,
 }
 
 // #[derive(Debug, Clone, PartialEq, Eq)]
@@ -124,6 +133,15 @@ impl From<io::Error> for ToConnectError {
         Self::NetworkError(err.to_string())
     }
 }
+
+impl From<BusError> for ToConnectError {
+    fn from(err: BusError) -> Self {
+        match err {
+            BusError::ChannelErr => Self::ChannelAbnormal,
+        }
+    }
+}
+
 impl<T> From<broadcast::error::SendError<T>> for NetworkTasksError {
     fn from(_: broadcast::error::SendError<T>) -> Self {
         Self::ChannelAbnormal
@@ -142,6 +160,14 @@ impl From<io::Error> for NetworkTasksError {
 impl From<ToConnectError> for NetworkTasksError {
     fn from(err: ToConnectError) -> Self {
         Self::ConnectFail(err)
+    }
+}
+
+impl From<BusError> for NetworkTasksError {
+    fn from(err: BusError) -> Self {
+        match err {
+            BusError::ChannelErr => Self::ChannelAbnormal,
+        }
     }
 }
 

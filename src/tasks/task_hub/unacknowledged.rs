@@ -1,8 +1,9 @@
 use crate::protocol::Protocol;
 use crate::tasks::task_publish::{TaskPublishQos1, TaskPublishQos2, TaskPublishQos2Rel};
 use crate::tasks::task_subscribe::TaskUnsubscribe;
-use crate::tasks::{Senders, TaskSubscribe};
+use crate::tasks::{HubError, TaskSubscribe};
 use crate::{AtLeastOnce, ExactlyOnce, TracePublishQos, TraceSubscribe, TraceUnubscribe};
+use for_event_bus::CopyOfBus;
 use std::mem;
 
 pub enum UnacknowledgedClientData {
@@ -46,24 +47,25 @@ impl UnacknowledgedClientData {
         }
     }
 
-    pub async fn to_acknowledge(&self, senders: &Senders) {
+    pub async fn to_acknowledge(&self, senders: &CopyOfBus) -> Result<(), HubError> {
         match self {
             UnacknowledgedClientData::PublishQoS1(packet) => {
-                TaskPublishQos1::init(senders.clone(), packet.clone()).await;
+                TaskPublishQos1::init(senders.clone(), packet.clone()).await?;
             }
             UnacknowledgedClientData::PublishQoS2(packet) => {
-                TaskPublishQos2::init(senders.clone(), packet.clone()).await;
+                TaskPublishQos2::init(senders.clone(), packet.clone()).await?;
             }
             UnacknowledgedClientData::PubRel(packet_id, id, protocol) => {
-                TaskPublishQos2Rel::init(senders.clone(), *packet_id, *id, *protocol).await
+                TaskPublishQos2Rel::init(senders.clone(), *packet_id, *id, *protocol).await?
             }
             UnacknowledgedClientData::Subscribe(packet) => {
-                TaskSubscribe::init(senders.clone(), packet.clone());
+                TaskSubscribe::init(senders.clone(), packet.clone()).await?;
             }
             UnacknowledgedClientData::Unsubscribe(packet) => {
-                TaskUnsubscribe::init(senders.clone(), packet.clone());
+                TaskUnsubscribe::init(senders.clone(), packet.clone()).await?;
             }
         }
+        Ok(())
     }
 }
 
