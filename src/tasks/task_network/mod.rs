@@ -237,7 +237,7 @@ impl TaskNetwork {
             match read_from_network(buf, self.version) {
                 Ok(packet) => {
                     let Some(packet) = packet else {
-                        continue;
+                        return Ok(());
                     };
                     match packet {
                         Packet::ConnAck(_packet) => {

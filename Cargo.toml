@@ -1,6 +1,6 @@
 [package]
 name = "for-mqtt-client"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 description = "mqtt v3/v5 client, only support rustls"
 repository = "https://github.com/jm-observer/for-mqtt-client"
@@ -38,5 +38,5 @@ for_event_bus = "0.1.5"
 custom-utils = "0.10.12"
 
 
-[patch.crates-io]
-for_event_bus = {path = "../for_event_bus/for-event-bus"}
+#[patch.crates-io]
+#for_event_bus = {path = "../for_event_bus/for-event-bus"}
