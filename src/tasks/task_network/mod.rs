@@ -203,8 +203,20 @@ impl TaskNetwork {
         buf: &mut BytesMut
     ) -> Result<bool, ToConnectError> {
         stream.write_all(self.connect_packet.as_ref()).await?;
-        let _len = stream.read_buf(buf).await?;
-        let packet = read_from_network(buf, self.version)?;
+        let packet;
+        loop {
+            let len = stream.read_buf(buf).await?;
+            if len == 0 {
+                return Err(ToConnectError::NetworkError(
+                    "TimeOut".to_string()
+                ));
+            }
+            let Some(packet_tmp) = read_from_network(buf, self.version)? else {
+                continue;
+            };
+            packet = packet_tmp;
+            break;
+        }
         let packet_ty = packet.packet_ty();
         let Packet::ConnAck(ack) = packet else {
             return Err(ToConnectError::NotConnAck(packet_ty));
@@ -224,6 +236,9 @@ impl TaskNetwork {
         loop {
             match read_from_network(buf, self.version) {
                 Ok(packet) => {
+                    let Some(packet) = packet else {
+                        continue;
+                    };
                     match packet {
                         Packet::ConnAck(_packet) => {
                             warn!("Unexpected ConnAck");
