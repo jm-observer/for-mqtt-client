@@ -6,21 +6,25 @@ pub use acks::*;
 pub use builder::*;
 pub use traces::*;
 
-use crate::protocol::packet::Publish;
-use crate::protocol::Protocol;
-use crate::tasks::task_network::ToConnectError;
-use crate::{AtLeastOnce, AtMostOnce, ExactlyOnce, QoS};
+use crate::{
+    protocol::{packet::Publish, Protocol},
+    tasks::task_network::ToConnectError,
+    AtLeastOnce, AtMostOnce, ExactlyOnce, QoS
+};
 use bytes::Bytes;
 use for_event_bus::BusError;
+use log::warn;
 use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc};
 
 #[derive(Debug, Clone)]
 pub enum ClientCommand {
-    /// to send disconnect packet and drop resouces, mqtt client will diconnect event if auto reconnect
+    /// to send disconnect packet and drop resouces, mqtt client will
+    /// diconnect event if auto reconnect
     DisconnectAndDrop,
-    /// not to send disconnect packet and drop resouces, mqtt client will diconnect event if auto reconnect
-    ViolenceDisconnectAndDrop,
+    /// not to send disconnect packet and drop resouces, mqtt client
+    /// will diconnect event if auto reconnect
+    ViolenceDisconnectAndDrop
 }
 #[derive(Debug, Clone)]
 pub enum ClientData {
@@ -28,7 +32,7 @@ pub enum ClientData {
     PublishQoS1(TracePublishQos<AtLeastOnce>),
     PublishQoS2(TracePublishQos<ExactlyOnce>),
     Subscribe(TraceSubscribe),
-    Unsubscribe(TraceUnubscribe),
+    Unsubscribe(TraceUnubscribe)
 }
 
 #[derive(Debug, Clone)]
@@ -44,7 +48,7 @@ pub enum MqttEvent {
     UnsubscribeAck(UnsubscribeAck),
     UnsubscribeFail(String),
     ConnectedErr(String),
-    Disconnected,
+    Disconnected
 }
 impl From<SubscribeAck> for MqttEvent {
     fn from(msg: SubscribeAck) -> Self {
@@ -86,7 +90,7 @@ impl ClientData {
             ClientData::PublishQoS1(packet) => packet.id,
             ClientData::PublishQoS2(packet) => packet.id,
             ClientData::Subscribe(packet) => packet.id,
-            ClientData::Unsubscribe(packet) => packet.id,
+            ClientData::Unsubscribe(packet) => packet.id
         }
     }
 
@@ -96,18 +100,24 @@ impl ClientData {
         payload: Arc<Bytes>,
         retain: bool,
         protocol: Protocol,
-        id: u32,
+        id: u32
     ) -> Self {
         match qos {
             QoS::AtMostOnce => {
-                Self::PublishQoS0(TracePublishQos::init(topic, payload, retain, protocol, id))
-            }
+                Self::PublishQoS0(TracePublishQos::init(
+                    topic, payload, retain, protocol, id
+                ))
+            },
             QoS::AtLeastOnce => {
-                Self::PublishQoS1(TracePublishQos::init(topic, payload, retain, protocol, id))
-            }
+                Self::PublishQoS1(TracePublishQos::init(
+                    topic, payload, retain, protocol, id
+                ))
+            },
             QoS::ExactlyOnce => {
-                Self::PublishQoS2(TracePublishQos::init(topic, payload, retain, protocol, id))
-            }
+                Self::PublishQoS2(TracePublishQos::init(
+                    topic, payload, retain, protocol, id
+                ))
+            },
         }
     }
 }
@@ -118,7 +128,7 @@ pub enum ClientErr {
     #[error("PayloadTooLong")]
     PayloadTooLong,
     #[error("ChannelErr")]
-    ChannelErr,
+    ChannelErr
 }
 
 impl<T> From<broadcast::error::SendError<T>> for ClientErr {
@@ -137,6 +147,10 @@ impl From<BusError> for ClientErr {
     fn from(err: BusError) -> Self {
         match err {
             BusError::ChannelErr => Self::ChannelErr,
+            BusError::DowncastErr => {
+                warn!("downcast err");
+                Self::ChannelErr
+            }
         }
     }
 }

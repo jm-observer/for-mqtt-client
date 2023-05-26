@@ -1,6 +1,9 @@
 use for_event_bus::BusError;
-use std::default::Default;
-use std::sync::atomic::{AtomicU32, Ordering};
+use log::warn;
+use std::{
+    default::Default,
+    sync::atomic::{AtomicU32, Ordering}
+};
 
 use crate::protocol::packet::Publish;
 use tokio::sync::{broadcast, mpsc};
@@ -8,17 +11,19 @@ use tokio::sync::{broadcast, mpsc};
 #[derive(Debug)]
 pub enum HubMsg {
     // RequestId(tokio::sync::oneshot::Sender<u16>),
-    /// recover packet_id that used to publish/subscribe/unsubscribe by client.
+    /// recover packet_id that used to publish/subscribe/unsubscribe
+    /// by client.
     RecoverId(u16),
     PingSuccess,
     PingFail,
     KeepAlive(KeepAliveTime),
     /// 接收从broker发送的publish包
     RxPublish(Publish),
-    /// 接收的publish已经完成整个qos流程. recover packet_id that used to publish by broker.
+    /// 接收的publish已经完成整个qos流程. recover packet_id that used
+    /// to publish by broker.
     AffirmRxId(u16),
     /// 确认qos=2的publish包
-    AffirmRxPublish(u16),
+    AffirmRxPublish(u16)
 }
 
 /// 仅限
@@ -44,20 +49,21 @@ pub enum HubState {
     ToConnect,
     Connected,
     ToDisconnect(ToDisconnectReason),
-    Disconnected,
+    Disconnected
 }
 
 impl HubState {
     pub fn is_to_connect(&self) -> bool {
         match self {
             HubState::ToConnect => true,
-            _ => false,
+            _ => false
         }
     }
+
     pub fn is_connected(&self) -> bool {
         match self {
             HubState::Connected => true,
-            _ => false,
+            _ => false
         }
     }
 }
@@ -71,7 +77,7 @@ impl Default for HubState {
 pub enum ToDisconnectReason {
     PingFail,
     NetworkErr(String),
-    ClientCommand,
+    ClientCommand
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -85,7 +91,7 @@ pub enum HubError {
     #[error("ViolenceDisconnectAndDrop")]
     ViolenceDisconnectAndDrop,
     #[error("Other {0}")]
-    Other(String),
+    Other(String)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -95,15 +101,19 @@ pub enum HubToConnectError {
     #[error("ViolenceDisconnectAndDrop")]
     ViolenceDisconnectAndDrop,
     #[error("Other {0}")]
-    Other(String),
+    Other(String)
 }
 
 impl From<HubToConnectError> for HubError {
     fn from(value: HubToConnectError) -> Self {
         match value {
-            HubToConnectError::ChannelAbnormal => HubError::ChannelAbnormal,
-            HubToConnectError::ViolenceDisconnectAndDrop => HubError::ViolenceDisconnectAndDrop,
-            HubToConnectError::Other(err) => HubError::Other(err),
+            HubToConnectError::ChannelAbnormal => {
+                HubError::ChannelAbnormal
+            },
+            HubToConnectError::ViolenceDisconnectAndDrop => {
+                HubError::ViolenceDisconnectAndDrop
+            },
+            HubToConnectError::Other(err) => HubError::Other(err)
         }
     }
 }
@@ -111,6 +121,10 @@ impl From<BusError> for HubError {
     fn from(value: BusError) -> Self {
         match value {
             BusError::ChannelErr => Self::ChannelAbnormal,
+            BusError::DowncastErr => {
+                warn!("downcast err");
+                Self::ChannelAbnormal
+            }
         }
     }
 }
@@ -143,6 +157,10 @@ impl From<BusError> for HubToConnectError {
     fn from(err: BusError) -> Self {
         match err {
             BusError::ChannelErr => Self::ChannelAbnormal,
+            BusError::DowncastErr => {
+                warn!("downcast err");
+                Self::ChannelAbnormal
+            }
         }
     }
 }

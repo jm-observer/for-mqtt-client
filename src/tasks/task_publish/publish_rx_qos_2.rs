@@ -1,31 +1,41 @@
-use crate::protocol::packet::{PubComp, PubRec, PubRel};
-use crate::protocol::Protocol;
-use crate::tasks::task_hub::HubMsg;
-use crate::tasks::utils::{complete_to_tx_packet, CommonErr};
-use crate::tasks::{HubError, Senders, TIMEOUT_TO_COMPLETE_TX};
-use for_event_bus::worker::IdentityOfSimple;
-use for_event_bus::CopyOfBus;
+use crate::{
+    protocol::{
+        packet::{PubComp, PubRec, PubRel},
+        Protocol
+    },
+    tasks::{
+        task_hub::HubMsg,
+        utils::{complete_to_tx_packet, CommonErr},
+        HubError, Senders, TIMEOUT_TO_COMPLETE_TX
+    }
+};
+use for_event_bus::{EntryOfBus, IdentityOfSimple, ToWorker, Worker};
 use tokio::spawn;
 
+#[derive(Worker)]
 /// consider the order in which pushlish   are repeated
 pub struct TaskPublishRxQos2 {
-    tx: Senders,
-    rx: IdentityOfSimple<PubRel>,
+    tx:        Senders,
+    rx:        IdentityOfSimple<PubRel>,
     packet_id: u16,
-    protocol: Protocol,
+    protocol:  Protocol
 }
 
 impl TaskPublishRxQos2 {
-    pub async fn init(bus: CopyOfBus, packet_id: u16, protocol: Protocol) -> Result<(), HubError> {
+    pub async fn init(
+        bus: EntryOfBus,
+        packet_id: u16,
+        protocol: Protocol
+    ) -> Result<(), HubError> {
         // let (tx, rx) = bus.login().await?;
-        let rx = bus.simple_login().await?;
+        let rx = bus.simple_login::<Self, PubRel>().await?;
         let tx = rx.tx();
         spawn(async move {
             let mut publish = Self {
                 tx: Senders::init(tx),
                 rx,
                 packet_id,
-                protocol,
+                protocol
             };
             if let Err(e) = publish.run().await {
                 match e {
@@ -35,8 +45,10 @@ impl TaskPublishRxQos2 {
         });
         Ok(())
     }
+
     async fn run(&mut self) -> anyhow::Result<(), CommonErr> {
-        // let mut rx_ack = self.tx.broadcast_tx.tx_pub_rel.subscribe();
+        // let mut rx_ack =
+        // self.tx.broadcast_tx.tx_pub_rel.subscribe();
         // self.rx.subscribe::<PubRel>()?;
         let mut data = PubRec::new(self.packet_id, self.protocol);
         complete_to_tx_packet::<PubRel, PubRec>(
@@ -44,14 +56,17 @@ impl TaskPublishRxQos2 {
             self.packet_id,
             TIMEOUT_TO_COMPLETE_TX,
             &self.tx,
-            &mut data,
+            &mut data
         )
         .await?;
         self.rx
-            .dispatch_event(HubMsg::AffirmRxPublish(self.packet_id))?;
+            .dispatch_event(HubMsg::AffirmRxPublish(self.packet_id))
+            .await?;
         let data = PubComp::new(self.packet_id, self.protocol);
         self.tx.tx_network_default(data.data()).await?;
-        self.rx.dispatch_event(HubMsg::AffirmRxId(self.packet_id))?;
+        self.rx
+            .dispatch_event(HubMsg::AffirmRxId(self.packet_id))
+            .await?;
         Ok(())
     }
 }

@@ -15,7 +15,7 @@ pub use task_subscribe::TaskSubscribe;
 use crate::tasks::task_network::DataWaitingToBeSend;
 use crate::tasks::utils::CommonErr;
 use anyhow::Result;
-use for_event_bus::worker::IdentityOfTx;
+use for_event_bus::IdentityOfTx;
 use task_client::data::MqttEvent;
 use tokio::sync::broadcast::*;
 
@@ -77,8 +77,8 @@ impl Senders {
         //     rx_hub_network_command,
         // )
     }
-    pub fn tx_to_user<T: Into<MqttEvent>>(&self, msg: T) {
-        if self.tx.dispatch_event(msg.into()).is_err() {
+    pub async fn tx_to_user<T: Into<MqttEvent>>(&self, msg: T) {
+        if self.tx.dispatch_event(msg.into()).await.is_err() {
             warn!("fail to tx mqtt event")
         }
     }
@@ -91,7 +91,7 @@ impl Senders {
     ) -> Result<Receipt, CommonErr> {
         let (receipter, mut rx) = Receipter::default();
         self.tx
-            .dispatch_event(DataWaitingToBeSend::init(bytes.into(), Some(receipter)))?;
+            .dispatch_event(DataWaitingToBeSend::init(bytes.into(), Some(receipter))).await?;
         Ok(rx.recv().await?)
     }
     // pub async fn tx_network_without_receipt<T: Into<Arc<Bytes>>>(&self, bytes: T) -> Result<()> {

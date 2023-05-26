@@ -33,10 +33,10 @@ tokio-native-tls = "0.3.1"
 
 webpki = "0.22.0"
 
-for_event_bus = "0.1.2"
+for_event_bus = "0.1.5"
 [dev-dependencies]
 custom-utils = "0.10.12"
 
 
-#[patch.crates-io]
-#for_event_bus = {path = "../for_event_bus"}
+[patch.crates-io]
+for_event_bus = {path = "../for_event_bus/for-event-bus"}

@@ -3,8 +3,8 @@ use crate::tasks::task_publish::{TaskPublishQos1, TaskPublishQos2, TaskPublishQo
 use crate::tasks::task_subscribe::TaskUnsubscribe;
 use crate::tasks::{HubError, TaskSubscribe};
 use crate::{AtLeastOnce, ExactlyOnce, TracePublishQos, TraceSubscribe, TraceUnubscribe};
-use for_event_bus::CopyOfBus;
 use std::mem;
+use for_event_bus::EntryOfBus;
 
 pub enum UnacknowledgedClientData {
     PublishQoS1(TracePublishQos<AtLeastOnce>),
@@ -47,7 +47,7 @@ impl UnacknowledgedClientData {
         }
     }
 
-    pub async fn to_acknowledge(&self, senders: &CopyOfBus) -> Result<(), HubError> {
+    pub async fn to_acknowledge(&self, senders: &EntryOfBus) -> Result<(), HubError> {
         match self {
             UnacknowledgedClientData::PublishQoS1(packet) => {
                 TaskPublishQos1::init(senders.clone(), packet.clone()).await?;

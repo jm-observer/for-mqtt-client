@@ -1,30 +1,37 @@
-use crate::protocol::packet::{SubAck, Subscribe};
-use crate::tasks::task_client::data::TraceSubscribe;
-use crate::tasks::task_hub::HubMsg;
-use crate::tasks::utils::{complete_to_tx_packet, CommonErr};
-use crate::tasks::{HubError, Senders, TIMEOUT_TO_COMPLETE_TX};
-use crate::SubscribeAck;
-use for_event_bus::worker::IdentityOfSimple;
-use for_event_bus::CopyOfBus;
+use crate::{
+    protocol::packet::{SubAck, Subscribe},
+    tasks::{
+        task_client::data::TraceSubscribe,
+        task_hub::HubMsg,
+        utils::{complete_to_tx_packet, CommonErr},
+        HubError, Senders, TIMEOUT_TO_COMPLETE_TX
+    },
+    SubscribeAck
+};
+use for_event_bus::{EntryOfBus, IdentityOfSimple, ToWorker, Worker};
 use tokio::spawn;
 
+#[derive(Worker)]
 /// consider the order in which pushlish   are repeated
 pub struct TaskSubscribe {
-    tx: Senders,
-    rx: IdentityOfSimple<SubAck>,
-    trace_packet: TraceSubscribe,
+    tx:           Senders,
+    rx:           IdentityOfSimple<SubAck>,
+    trace_packet: TraceSubscribe
 }
 
 impl TaskSubscribe {
-    pub async fn init(bus: CopyOfBus, trace_packet: TraceSubscribe) -> Result<(), HubError> {
+    pub async fn init(
+        bus: EntryOfBus,
+        trace_packet: TraceSubscribe
+    ) -> Result<(), HubError> {
         // let (tx, rx) = bus.login().await?;
-        let rx = bus.simple_login().await?;
+        let rx = bus.simple_login::<Self, SubAck>().await?;
         let tx = rx.tx();
         spawn(async move {
             let subscriber = Self {
                 tx: Senders::init(tx),
                 rx,
-                trace_packet,
+                trace_packet
             };
             if let Err(e) = subscriber.run().await {
                 match e {
@@ -34,11 +41,12 @@ impl TaskSubscribe {
         });
         Ok(())
     }
+
     async fn run(self) -> anyhow::Result<(), CommonErr> {
         let TaskSubscribe {
             tx,
             mut rx,
-            mut trace_packet,
+            mut trace_packet
         } = self;
         // debug!("start to subscribe");
         // rx.subscribe::<SubAck>()?;
@@ -47,11 +55,14 @@ impl TaskSubscribe {
             trace_packet.packet_id(),
             TIMEOUT_TO_COMPLETE_TX,
             &tx,
-            &mut trace_packet.subscribe,
+            &mut trace_packet.subscribe
         )
         .await?;
 
-        rx.dispatch_event(HubMsg::RecoverId(trace_packet.packet_id()))?;
+        rx.dispatch_event(HubMsg::RecoverId(
+            trace_packet.packet_id()
+        ))
+        .await?;
 
         // let SubAck { return_codes, .. } = ack;
         let TraceSubscribe { id, .. } = trace_packet;
@@ -72,9 +83,9 @@ impl TaskSubscribe {
         //     .collect();
         let ack = SubscribeAck {
             id,
-            acks: ack.as_ref().clone().return_codes(),
+            acks: ack.as_ref().clone().return_codes()
         };
-        tx.tx_to_user(ack);
+        tx.tx_to_user(ack).await;
         Ok(())
     }
 }

@@ -1,12 +1,11 @@
-use crate::tasks::Senders;
-use crate::traits::packet_dup::PacketDup;
-use crate::traits::packet_rel::PacketRel;
+use crate::{
+    tasks::Senders,
+    traits::{packet_dup::PacketDup, packet_rel::PacketRel}
+};
 use bytes::Bytes;
-use for_event_bus::worker::IdentityOfSimple;
-use for_event_bus::BusError;
-use log::debug;
-use std::sync::Arc;
-use std::time::Duration;
+use for_event_bus::{BusError, IdentityOfSimple};
+use log::{debug, warn};
+use std::{sync::Arc, time::Duration};
 use tokio::sync::{broadcast, mpsc, oneshot};
 
 pub async fn complete_to_tx_packet<Ack: PacketRel, T: PacketDup>(
@@ -14,14 +13,17 @@ pub async fn complete_to_tx_packet<Ack: PacketRel, T: PacketDup>(
     packet_id: u16,
     duration: u64,
     tx: &Senders,
-    packet: &mut T,
+    packet: &mut T
 ) -> anyhow::Result<Arc<Ack>, CommonErr> {
     let data = packet.data();
     let mut dup_data = Option::<Arc<Bytes>>::None;
     tx.tx_network_default(data).await?;
     loop {
-        if let Ok(packet) =
-            tokio::time::timeout(Duration::from_secs(duration), timeout_rx(rx_ack, packet_id)).await
+        if let Ok(packet) = tokio::time::timeout(
+            Duration::from_secs(duration),
+            timeout_rx(rx_ack, packet_id)
+        )
+        .await
         {
             return Ok(packet?);
         } else {
@@ -39,7 +41,7 @@ pub async fn complete_to_tx_packet<Ack: PacketRel, T: PacketDup>(
 
 async fn timeout_rx<T: PacketRel>(
     rx_ack: &mut IdentityOfSimple<T>,
-    packet_id: u16,
+    packet_id: u16
 ) -> anyhow::Result<Arc<T>, CommonErr> {
     loop {
         let msg = rx_ack.recv().await?;
@@ -52,7 +54,7 @@ async fn timeout_rx<T: PacketRel>(
 
 #[derive(Debug)]
 pub enum CommonErr {
-    ChannelAbnormal,
+    ChannelAbnormal
 }
 
 impl<T> From<broadcast::error::SendError<T>> for CommonErr {
@@ -79,6 +81,10 @@ impl From<BusError> for CommonErr {
     fn from(err: BusError) -> Self {
         match err {
             BusError::ChannelErr => Self::ChannelAbnormal,
+            BusError::DowncastErr => {
+                warn!("downcast err");
+                Self::ChannelAbnormal
+            }
         }
     }
 }
