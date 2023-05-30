@@ -2,6 +2,7 @@
 pub mod datas;
 pub mod protocol;
 mod tasks;
+#[cfg(feature = "tls")]
 pub mod tls;
 pub mod traits;
 pub mod utils;
@@ -13,9 +14,9 @@ pub use tasks::task_client::{data::*, Client};
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd)]
 pub enum QoS {
-    AtMostOnce = 0,
+    AtMostOnce  = 0,
     AtLeastOnce = 1,
-    ExactlyOnce = 2,
+    ExactlyOnce = 2
 }
 
 #[derive(Debug, Clone)]
@@ -47,6 +48,7 @@ impl Protocol for ProtocolV5 {
     fn is_v5() -> bool {
         true
     }
+
     fn is_v4() -> bool {
         false
     }
@@ -57,7 +59,7 @@ impl Protocol for ProtocolV5 {
 pub enum QoSWithPacketId {
     AtMostOnce,
     AtLeastOnce(u16),
-    ExactlyOnce(u16),
+    ExactlyOnce(u16)
 }
 
 impl QoSWithPacketId {
@@ -65,14 +67,19 @@ impl QoSWithPacketId {
         match self {
             QoSWithPacketId::AtMostOnce => 0,
             QoSWithPacketId::AtLeastOnce(_) => 1,
-            QoSWithPacketId::ExactlyOnce(_) => 2,
+            QoSWithPacketId::ExactlyOnce(_) => 2
         }
     }
+
     pub fn packet_id(&self) -> Option<u16> {
         match self {
             QoSWithPacketId::AtMostOnce => None,
-            QoSWithPacketId::AtLeastOnce(packet_id) => Some(packet_id.clone()),
-            QoSWithPacketId::ExactlyOnce(packet_id) => Some(packet_id.clone()),
+            QoSWithPacketId::AtLeastOnce(packet_id) => {
+                Some(packet_id.clone())
+            },
+            QoSWithPacketId::ExactlyOnce(packet_id) => {
+                Some(packet_id.clone())
+            },
         }
     }
 }
@@ -83,6 +90,6 @@ pub fn qos(num: u8) -> Result<QoS, PacketParseError> {
         0 => Ok(QoS::AtMostOnce),
         1 => Ok(QoS::AtLeastOnce),
         2 => Ok(QoS::ExactlyOnce),
-        qos => Err(PacketParseError::InvalidQoS(qos)),
+        qos => Err(PacketParseError::InvalidQoS(qos))
     }
 }

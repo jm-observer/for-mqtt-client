@@ -1,8 +1,10 @@
-use crate::protocol::packet::FixedHeaderError;
-use crate::tasks::task_client::ClientRx;
-use crate::tasks::TaskHub;
+#[cfg(feature = "tls")]
 use crate::tls::TlsConfig;
-use crate::Client;
+use crate::{
+    protocol::packet::FixedHeaderError,
+    tasks::{task_client::ClientRx, TaskHub},
+    Client
+};
 use anyhow::{bail, Result};
 use packet::connect::will::LastWill;
 use std::sync::Arc;
@@ -12,38 +14,42 @@ pub mod packet;
 #[derive(Debug, Clone)]
 pub struct MqttOptions {
     /// broker address that you want to connect to
-    broker_addr: String,
+    broker_addr:              String,
     /// broker port
-    port: u16,
-    /// keep alive time to send pingreq to broker when the connection is idle
-    keep_alive: u16,
+    port:                     u16,
+    /// keep alive time to send pingreq to broker when the connection
+    /// is idle
+    keep_alive:               u16,
     /// clean (or) persistent session
-    clean_session: bool,
+    clean_session:            bool,
     /// client identifier
-    client_id: Arc<String>,
+    client_id:                Arc<String>,
     /// username and password
-    credentials: Option<(Arc<String>, Arc<String>)>,
-    /// maximum incoming packet size (verifies remaining length of the packet)
+    credentials:              Option<(Arc<String>, Arc<String>)>,
+    /// maximum incoming packet size (verifies remaining length of
+    /// the packet)
     max_incoming_packet_size: usize,
-    /// Maximum outgoing packet size (only verifies publish payload size)
-    // TODO Verify this with all packets. This can be packet.write but message left in
-    // the state might be a footgun as user has to explicitly clean it. Probably state
-    // has to be moved to network
+    /// Maximum outgoing packet size (only verifies publish payload
+    /// size)
+    // TODO Verify this with all packets. This can be packet.write
+    // but message left in the state might be a footgun as user
+    // has to explicitly clean it. Probably state has to be moved
+    // to network
     max_outgoing_packet_size: usize,
     /// Last will that will be issued on unexpected disconnect
-    last_will: Option<LastWill>,
+    last_will:                Option<LastWill>,
 
     /// 是否自动重连
     pub(crate) auto_reconnect: bool,
 
-    pub(crate) network_protocol: NetworkProtocol,
+    pub(crate) network_protocol: NetworkProtocol
 }
 
 impl MqttOptions {
     pub fn new<S: Into<Arc<String>>, T: Into<String>>(
         id: S,
         host: T,
-        port: u16,
+        port: u16
     ) -> Result<MqttOptions> {
         let id = id.into();
         if id.starts_with(' ') || id.is_empty() {
@@ -61,9 +67,10 @@ impl MqttOptions {
             max_outgoing_packet_size: 10 * 1024,
             last_will: None,
             auto_reconnect: false,
-            network_protocol: Default::default(),
+            network_protocol: Default::default()
         })
     }
+
     /// 设置为自动重连，会默认设置clean_session=false
     pub fn auto_reconnect(mut self) -> Self {
         self.auto_reconnect = true;
@@ -71,6 +78,7 @@ impl MqttOptions {
         self
     }
 
+    #[cfg(feature = "tls")]
     pub fn set_tls(mut self, config: TlsConfig) -> Self {
         self.network_protocol = NetworkProtocol::Tls(config);
         self
@@ -90,8 +98,8 @@ impl MqttOptions {
         self.last_will.clone()
     }
 
-    /// Set number of seconds after which client should ping the broker
-    /// if there is no other data exchange
+    /// Set number of seconds after which client should ping the
+    /// broker if there is no other data exchange
     pub fn set_keep_alive(mut self, duration: u16) -> Self {
         assert!(duration >= 5, "Keep alives should be >= 5 secs");
         self.keep_alive = duration;
@@ -109,7 +117,11 @@ impl MqttOptions {
     }
 
     /// Set packet size limit for outgoing an incoming packets
-    pub fn set_max_packet_size(&mut self, incoming: usize, outgoing: usize) -> &mut Self {
+    pub fn set_max_packet_size(
+        &mut self,
+        incoming: usize,
+        outgoing: usize
+    ) -> &mut Self {
         self.max_incoming_packet_size = incoming;
         self.max_outgoing_packet_size = outgoing;
         self
@@ -120,13 +132,18 @@ impl MqttOptions {
         self.max_incoming_packet_size
     }
 
-    /// `clean_session = true` removes all the state from queues & instructs the broker
-    /// to clean all the client state when client disconnects.
+    /// `clean_session = true` removes all the state from queues &
+    /// instructs the broker to clean all the client state when
+    /// client disconnects.
     ///
-    /// When set `false`, broker will hold the client state and performs pending
-    /// operations on the client when reconnection with same `client_id`
-    /// happens. Local queue state is also held to retransmit packets after reconnection.
-    pub fn set_clean_session(&mut self, clean_session: bool) -> &mut Self {
+    /// When set `false`, broker will hold the client state and
+    /// performs pending operations on the client when
+    /// reconnection with same `client_id` happens. Local queue
+    /// state is also held to retransmit packets after reconnection.
+    pub fn set_clean_session(
+        &mut self,
+        clean_session: bool
+    ) -> &mut Self {
         self.clean_session = clean_session;
         self
     }
@@ -137,10 +154,13 @@ impl MqttOptions {
     }
 
     /// Username and password
-    pub fn set_credentials<U: Into<Arc<String>>, P1: Into<Arc<String>>>(
+    pub fn set_credentials<
+        U: Into<Arc<String>>,
+        P1: Into<Arc<String>>
+    >(
         &mut self,
         username: U,
-        password: P1,
+        password: P1
     ) -> &mut Self {
         self.credentials = Some((username.into(), password.into()));
         self
@@ -154,6 +174,7 @@ impl MqttOptions {
     pub async fn connect_to_v4(self) -> Result<(Client, ClientRx)> {
         Ok(TaskHub::connect(self, Protocol::V4).await?)
     }
+
     pub async fn connect_to_v5(self) -> Result<(Client, ClientRx)> {
         Ok(TaskHub::connect(self, Protocol::V5).await?)
     }
@@ -163,7 +184,7 @@ impl MqttOptions {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Protocol {
     V4,
-    V5,
+    V5
 }
 
 impl Protocol {
@@ -188,26 +209,33 @@ impl Protocol {
 pub struct FixedHeader {
     /// First byte of the stream. Used to identify packet types and
     /// several flags
-    pub(crate) byte1: u8,
-    /// Length of fixed header. Byte 1 + (1..4) bytes. So fixed header
-    /// len can vary from 2 bytes to 5 bytes
-    /// 1..4 bytes are variable length encoded to represent remaining length
+    pub(crate) byte1:            u8,
+    /// Length of fixed header. Byte 1 + (1..4) bytes. So fixed
+    /// header len can vary from 2 bytes to 5 bytes
+    /// 1..4 bytes are variable length encoded to represent remaining
+    /// length
     pub(crate) fixed_header_len: usize,
-    /// Remaining length of the packet. Doesn't include fixed header bytes
-    /// Represents variable header + payload size
-    pub(crate) remaining_len: usize,
+    /// Remaining length of the packet. Doesn't include fixed header
+    /// bytes Represents variable header + payload size
+    pub(crate) remaining_len:    usize
 }
 
 impl FixedHeader {
-    pub fn new(byte1: u8, remaining_len_len: usize, remaining_len: usize) -> FixedHeader {
+    pub fn new(
+        byte1: u8,
+        remaining_len_len: usize,
+        remaining_len: usize
+    ) -> FixedHeader {
         FixedHeader {
             byte1,
             fixed_header_len: remaining_len_len + 1,
-            remaining_len,
+            remaining_len
         }
     }
 
-    pub fn packet_type(&self) -> Result<PacketType, PacketParseError> {
+    pub fn packet_type(
+        &self
+    ) -> Result<PacketType, PacketParseError> {
         let num = self.byte1 >> 4;
         match num {
             1 => Ok(PacketType::Connect),
@@ -225,12 +253,13 @@ impl FixedHeader {
             13 => Ok(PacketType::PingResp),
             14 => Ok(PacketType::Disconnect),
             // todo
-            _ => Err(PacketParseError::InvalidPacketType(num)),
+            _ => Err(PacketParseError::InvalidPacketType(num))
         }
     }
 
-    /// Returns the size of full packet (fixed header + variable header + payload)
-    /// Fixed header is enough to get the size of a frame in the stream
+    /// Returns the size of full packet (fixed header + variable
+    /// header + payload) Fixed header is enough to get the size
+    /// of a frame in the stream
     pub fn frame_length(&self) -> usize {
         self.fixed_header_len + self.remaining_len
     }
@@ -257,14 +286,18 @@ pub enum PacketType {
     UnsubAck,
     PingReq,
     PingResp,
-    Disconnect,
+    Disconnect
 }
 
 impl From<FixedHeaderError> for PacketParseError {
     fn from(value: FixedHeaderError) -> Self {
         match value {
-            FixedHeaderError::InsufficientBytes(len) => Self::InsufficientBytes(len),
-            FixedHeaderError::MalformedRemainingLength => Self::MalformedRemainingLength,
+            FixedHeaderError::InsufficientBytes(len) => {
+                Self::InsufficientBytes(len)
+            },
+            FixedHeaderError::MalformedRemainingLength => {
+                Self::MalformedRemainingLength
+            },
         }
     }
 }
@@ -274,31 +307,31 @@ impl From<FixedHeaderError> for PacketParseError {
 pub enum PropertyType {
     PayloadFormatIndicator = 1,
     MessageExpiryInterval = 2,
-    ContentType = 3,
-    ResponseTopic = 8,
-    CorrelationData = 9,
+    ContentType          = 3,
+    ResponseTopic        = 8,
+    CorrelationData      = 9,
     SubscriptionIdentifier = 11,
     SessionExpiryInterval = 17,
     AssignedClientIdentifier = 18,
-    ServerKeepAlive = 19,
+    ServerKeepAlive      = 19,
     AuthenticationMethod = 21,
-    AuthenticationData = 22,
+    AuthenticationData   = 22,
     RequestProblemInformation = 23,
-    WillDelayInterval = 24,
+    WillDelayInterval    = 24,
     RequestResponseInformation = 25,
-    ResponseInformation = 26,
-    ServerReference = 28,
-    ReasonString = 31,
-    ReceiveMaximum = 33,
-    TopicAliasMaximum = 34,
-    TopicAlias = 35,
-    MaximumQos = 36,
-    RetainAvailable = 37,
-    UserProperty = 38,
-    MaximumPacketSize = 39,
+    ResponseInformation  = 26,
+    ServerReference      = 28,
+    ReasonString         = 31,
+    ReceiveMaximum       = 33,
+    TopicAliasMaximum    = 34,
+    TopicAlias           = 35,
+    MaximumQos           = 36,
+    RetainAvailable      = 37,
+    UserProperty         = 38,
+    MaximumPacketSize    = 39,
     WildcardSubscriptionAvailable = 40,
     SubscriptionIdentifierAvailable = 41,
-    SharedSubscriptionAvailable = 42,
+    SharedSubscriptionAvailable = 42
 }
 
 /// Error during serialization and deserialization
@@ -340,13 +373,14 @@ pub enum PacketParseError {
     MalformedPacket,
     #[error("A Subscribe packet must contain atleast one filter")]
     EmptySubscription,
-    /// 剩余长度使用了一种可变长度的结构来编码，这种结构使用单一字节表示0-127的值。
+    /// 剩余长度使用了一种可变长度的结构来编码，
+    /// 这种结构使用单一字节表示0-127的值。
     /// 无法用约定的规则解析剩余长度——断开
     #[error("At least {0} more bytes required to frame packet")]
     InsufficientBytes(usize),
     /// 包剩余长度大于剩余长度——需要等待其他数据
     #[error("Malformed remaining length")]
-    MalformedRemainingLength,
+    MalformedRemainingLength
 }
 
 fn property(num: u8) -> Result<PropertyType, PacketParseError> {
@@ -378,13 +412,14 @@ fn property(num: u8) -> Result<PropertyType, PacketParseError> {
         40 => PropertyType::WildcardSubscriptionAvailable,
         41 => PropertyType::SubscriptionIdentifierAvailable,
         42 => PropertyType::SharedSubscriptionAvailable,
-        num => return Err(PacketParseError::InvalidPropertyType(num)),
+        num => return Err(PacketParseError::InvalidPropertyType(num))
     };
 
     Ok(property)
 }
 
-/// Return number of remaining length bytes required for encoding length
+/// Return number of remaining length bytes required for encoding
+/// length
 fn len_len(len: usize) -> usize {
     if len >= 2_097_152 {
         4
@@ -400,7 +435,8 @@ fn len_len(len: usize) -> usize {
 #[derive(Debug, Clone)]
 pub enum NetworkProtocol {
     Tcp,
-    Tls(TlsConfig), // Quic
+    #[cfg(feature = "tls")]
+    Tls(TlsConfig) // Quic
 }
 
 impl Default for NetworkProtocol {

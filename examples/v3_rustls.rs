@@ -25,7 +25,7 @@ async fn main() -> Result<()> {
     );
     let options = MqttOptions::new(
         "abc111sfew".to_string(),
-        "54.87.92.106".to_string(),
+        "broker.emqx.io".to_string(),
         8883
     )?
     .set_keep_alive(30)

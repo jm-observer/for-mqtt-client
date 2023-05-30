@@ -1,6 +1,6 @@
 [package]
 name = "for-mqtt-client"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2021"
 description = "mqtt v3/v5 client, only support rustls"
 repository = "https://github.com/jm-observer/for-mqtt-client"
@@ -24,19 +24,27 @@ log = "0.4.17"
 ringbuf = "0.3.1"
 chrono = "0.4.23"
 
-rustls = {version = "0.20.8", features = ["dangerous_configuration"]}
-rustls-native-certs = "0.6.2"
-rustls-pemfile = "1.0.2"
+rustls = {version = "0.20.8", features = ["dangerous_configuration"], optional = true}
+rustls-native-certs = {version = "0.6.2" , optional = true}
+rustls-pemfile = {version = "1.0.2", optional = true}
 #tokio-tls = "0.3.1"
-tokio-rustls = "0.23.4"
-tokio-native-tls = "0.3.1"
-
-webpki = "0.22.0"
+tokio-rustls = {version = "0.23.4", optional = true}
+tokio-native-tls = {version = "0.3.1", optional = true}
+webpki = {version = "0.22.0", optional = true}
 
 for_event_bus = "0.1.5"
 [dev-dependencies]
 custom-utils = "0.10.12"
 
+[features]
+# default = ["tls"]
+tls = ["rustls", "rustls-native-certs", "rustls-pemfile", "tokio-rustls", "tokio-native-tls", "webpki"]
 
 #[patch.crates-io]
 #for_event_bus = {path = "../for_event_bus/for-event-bus"}
+
+
+[[example]]
+name = "v3_rustls"
+required-features = ["tls"] 
+

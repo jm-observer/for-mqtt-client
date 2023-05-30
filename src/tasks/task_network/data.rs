@@ -7,17 +7,17 @@ use tokio::{
     net::TcpStream
 };
 
-use crate::{
-    protocol::{
-        packet::{ConnectReturnFailCode, Disconnect},
-        NetworkProtocol, PacketParseError, PacketType
-    },
-    tls::{rustls::init_rustls, TlsConfig}
+use crate::protocol::{
+    packet::{ConnectReturnFailCode, Disconnect},
+    NetworkProtocol, PacketParseError, PacketType
 };
+#[cfg(feature = "tls")]
+use crate::tls::{rustls::init_rustls, TlsConfig};
 use anyhow::Result;
 use for_event_bus::BusError;
 use log::warn;
 use tokio::sync::{broadcast, mpsc};
+#[cfg(feature = "tls")]
 use tokio_rustls::client::TlsStream;
 
 #[derive(Debug)]
@@ -204,6 +204,7 @@ impl<T> From<mpsc::error::SendError<T>> for ToConnectError {
 
 pub enum Stream {
     Tcp(TcpStream),
+    #[cfg(feature = "tls")]
     Rustls(TlsStream<TcpStream>)
 }
 
@@ -214,6 +215,7 @@ impl Stream {
     ) -> std::io::Result<usize> {
         match self {
             Stream::Tcp(tcp_stream) => tcp_stream.read_buf(buf).await,
+            #[cfg(feature = "tls")]
             Stream::Rustls(tls_stream) => {
                 tls_stream.read_buf(buf).await
             },
@@ -228,6 +230,7 @@ impl Stream {
             Stream::Tcp(tcp_stream) => {
                 tcp_stream.write_all(datas).await
             },
+            #[cfg(feature = "tls")]
             Stream::Rustls(tls_stream) => {
                 tls_stream.write_all(datas).await
             },
@@ -245,6 +248,7 @@ impl Stream {
                     TcpStream::connect((addr.as_str(), port)).await?;
                 stream.into()
             },
+            #[cfg(feature = "tls")]
             NetworkProtocol::Tls(config) => Self::init_rustls(
                 config, addr, port
             )
@@ -255,6 +259,7 @@ impl Stream {
         })
     }
 
+    #[cfg(feature = "tls")]
     async fn init_rustls(
         config: TlsConfig,
         addr: &String,
@@ -277,6 +282,7 @@ impl From<TcpStream> for Stream {
     }
 }
 
+#[cfg(feature = "tls")]
 impl From<TlsStream<TcpStream>> for Stream {
     fn from(value: TlsStream<TcpStream>) -> Self {
         Self::Rustls(value)
