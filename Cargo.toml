@@ -9,7 +9,7 @@ license-file = "LICENSE"
 readme = "README.md"
 
 include = [
-    "LICENSE", "Cargo.toml", "README.md", "src/**/*.rs"
+    "LICENSE", "Cargo.toml", "README.md", "src/**/*.rs", "examples"
 ]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
