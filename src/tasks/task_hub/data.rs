@@ -2,7 +2,7 @@ use for_event_bus::BusError;
 use log::warn;
 use std::{
     default::Default,
-    sync::atomic::{AtomicU32, Ordering}
+    sync::atomic::{AtomicU32, Ordering},
 };
 
 use crate::protocol::packet::Publish;
@@ -23,7 +23,7 @@ pub enum HubMsg {
     /// to publish by broker.
     AffirmRxId(u16),
     /// 确认qos=2的publish包
-    AffirmRxPublish(u16)
+    AffirmRxPublish(u16),
 }
 
 /// 仅限
@@ -49,21 +49,28 @@ pub enum HubState {
     ToConnect,
     Connected,
     ToDisconnect(ToDisconnectReason),
-    Disconnected
+    Disconnected,
 }
 
 impl HubState {
     pub fn is_to_connect(&self) -> bool {
         match self {
             HubState::ToConnect => true,
-            _ => false
+            _ => false,
         }
     }
 
     pub fn is_connected(&self) -> bool {
         match self {
             HubState::Connected => true,
-            _ => false
+            _ => false,
+        }
+    }
+
+    pub fn is_disconnected(&self) -> bool {
+        match self {
+            HubState::Disconnected => true,
+            _ => false,
         }
     }
 }
@@ -77,7 +84,7 @@ impl Default for HubState {
 pub enum ToDisconnectReason {
     PingFail,
     NetworkErr(String),
-    ClientCommand
+    ClientCommand,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -91,7 +98,7 @@ pub enum HubError {
     #[error("ViolenceDisconnectAndDrop")]
     ViolenceDisconnectAndDrop,
     #[error("Other {0}")]
-    Other(String)
+    Other(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -101,7 +108,7 @@ pub enum HubToConnectError {
     #[error("ViolenceDisconnectAndDrop")]
     ViolenceDisconnectAndDrop,
     #[error("Other {0}")]
-    Other(String)
+    Other(String),
 }
 
 impl From<HubToConnectError> for HubError {
@@ -113,7 +120,7 @@ impl From<HubToConnectError> for HubError {
             HubToConnectError::ViolenceDisconnectAndDrop => {
                 HubError::ViolenceDisconnectAndDrop
             },
-            HubToConnectError::Other(err) => HubError::Other(err)
+            HubToConnectError::Other(err) => HubError::Other(err),
         }
     }
 }
@@ -124,7 +131,7 @@ impl From<BusError> for HubError {
             BusError::DowncastErr => {
                 warn!("downcast err");
                 Self::ChannelAbnormal
-            }
+            },
         }
     }
 }
@@ -160,7 +167,7 @@ impl From<BusError> for HubToConnectError {
             BusError::DowncastErr => {
                 warn!("downcast err");
                 Self::ChannelAbnormal
-            }
+            },
         }
     }
 }

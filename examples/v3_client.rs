@@ -2,11 +2,11 @@
 
 use anyhow::Result;
 use for_mqtt_client::{
-    protocol::MqttOptions, MqttEvent, ProtocolV4, QoS
+    protocol::MqttOptions, MqttEvent, ProtocolV4, QoS,
 };
 use log::{
     debug, error, info, warn,
-    LevelFilter::{Debug, Info}
+    LevelFilter::{Debug, Info},
 };
 use std::{io::Read, time::Duration};
 use tokio::{spawn, time::sleep};
@@ -14,7 +14,7 @@ use tokio::{spawn, time::sleep};
 #[tokio::main(flavor = "multi_thread", worker_threads = 10)]
 async fn main() -> Result<()> {
     custom_utils::logger::custom_build(Debug)
-        // .module("for_mqtt_client::tasks::task_network", Debug)
+        // .module("for_event_bus::bus", Info)
         // .module("for_mqtt_client::tasks::task_publish", Debug)
         .build_default()
         .log_to_stdout()
@@ -22,7 +22,7 @@ async fn main() -> Result<()> {
     let mut options = MqttOptions::new(
         "abc111sfew".to_string(),
         "broker.emqx.io".to_string(),
-        1883
+        1883,
     )?;
 
     let (client, mut rx) = options
@@ -56,7 +56,7 @@ async fn main() -> Result<()> {
                 },
                 event => {
                     info!("\nMqttEvent：{:?} \n", event);
-                }
+                },
             }
         }
         warn!("**************");
@@ -81,7 +81,7 @@ async fn main() -> Result<()> {
     );
     sleep(Duration::from_secs(15)).await;
     client.unsubscribe("abcfew".to_string()).await?;
-    sleep(Duration::from_secs(90)).await;
+    sleep(Duration::from_secs(9000)).await;
     client.disconnect().await?;
     sleep(Duration::from_secs(120)).await;
     Ok(())
