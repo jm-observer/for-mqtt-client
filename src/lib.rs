@@ -8,15 +8,15 @@ pub mod traits;
 pub mod utils;
 
 use protocol::PacketParseError;
-pub use tasks::task_client::{data::*, Client};
+pub use tasks::task_client::{data::*, Client, ClientRx};
 
 /// Quality of service
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd)]
 pub enum QoS {
-    AtMostOnce  = 0,
+    AtMostOnce = 0,
     AtLeastOnce = 1,
-    ExactlyOnce = 2
+    ExactlyOnce = 2,
 }
 
 #[derive(Debug, Clone)]
@@ -59,7 +59,7 @@ impl Protocol for ProtocolV5 {
 pub enum QoSWithPacketId {
     AtMostOnce,
     AtLeastOnce(u16),
-    ExactlyOnce(u16)
+    ExactlyOnce(u16),
 }
 
 impl QoSWithPacketId {
@@ -67,7 +67,7 @@ impl QoSWithPacketId {
         match self {
             QoSWithPacketId::AtMostOnce => 0,
             QoSWithPacketId::AtLeastOnce(_) => 1,
-            QoSWithPacketId::ExactlyOnce(_) => 2
+            QoSWithPacketId::ExactlyOnce(_) => 2,
         }
     }
 
@@ -90,6 +90,6 @@ pub fn qos(num: u8) -> Result<QoS, PacketParseError> {
         0 => Ok(QoS::AtMostOnce),
         1 => Ok(QoS::AtLeastOnce),
         2 => Ok(QoS::ExactlyOnce),
-        qos => Err(PacketParseError::InvalidQoS(qos))
+        qos => Err(PacketParseError::InvalidQoS(qos)),
     }
 }
