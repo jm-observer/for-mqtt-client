@@ -11,15 +11,24 @@ pub struct TlsConfig {
 }
 
 impl TlsConfig {
-    pub fn set_server_ca_pem_file(mut self, ca_file: PathBuf) -> Self {
+    pub fn set_server_ca_pem_file(
+        mut self,
+        ca_file: PathBuf,
+    ) -> Self {
         self.verify_server = VerifyServer::SelfSigned {
             verify_dns_name: self.verify_server.verify_dns_name(),
             ca_file: CertificateFile::Pem(ca_file),
         };
         self
     }
+
     pub fn set_verify_dns_name(mut self, verify: bool) -> Self {
         self.verify_server.set_verify_dns_name(verify);
+        self
+    }
+
+    pub fn insecurity(mut self) -> Self {
+        self.verify_server = VerifyServer::Insecurity;
         self
     }
 }
@@ -33,6 +42,7 @@ pub enum VerifyServer {
         verify_dns_name: bool,
         ca_file: CertificateFile,
     },
+    Insecurity,
 }
 
 impl VerifyServer {
@@ -42,14 +52,18 @@ impl VerifyServer {
             VerifyServer::SelfSigned {
                 verify_dns_name, ..
             } => *verify_dns_name,
+            VerifyServer::Insecurity => false,
         }
     }
     pub fn set_verify_dns_name(&mut self, verify: bool) {
         match self {
-            VerifyServer::CA { verify_dns_name } => *verify_dns_name = verify,
+            VerifyServer::CA { verify_dns_name } => {
+                *verify_dns_name = verify
+            },
             VerifyServer::SelfSigned {
                 verify_dns_name, ..
             } => *verify_dns_name = verify,
+            _ => {},
         }
     }
 }

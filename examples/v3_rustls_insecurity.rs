@@ -3,27 +3,24 @@ use for_mqtt_client::{
     protocol::MqttOptions, tls::TlsConfig, MqttEvent, QoS,
 };
 use log::{info, warn, LevelFilter::Debug};
-use std::{io::Read, time::Duration};
+use std::time::Duration;
 use tokio::{spawn, time::sleep};
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 10)]
 async fn main() -> Result<()> {
     custom_utils::logger::custom_build(Debug)
-        // .module("for_mqtt_client::tasks::task_network", Debug)
-        // .module("for_mqtt_client::tasks::task_publish", Debug)
         .build_default()
         .log_to_stdout()
         .start();
 
-    let config = TlsConfig::default().set_server_ca_pem_file(
-        "resources/broker.emqx.io-ca.crt".into(),
-    );
+    let config = TlsConfig::default().insecurity();
     let options = MqttOptions::new(
-        "abc111sfew".to_string(),
+        "mq-id".to_string(),
         "broker.emqx.io".to_string(),
         8883,
     )?
     .set_keep_alive(30)
+    .set_credentials("afe".to_string(), "fe4yl".to_string())
     .auto_reconnect()
     .set_tls(config);
 

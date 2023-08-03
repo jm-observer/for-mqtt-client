@@ -1,14 +1,10 @@
-#![allow(dead_code, unused_mut, unused_imports, unused_variables)]
-
 use anyhow::Result;
-use for_mqtt_client::{
-    protocol::MqttOptions, MqttEvent, ProtocolV5, QoS
-};
+use for_mqtt_client::{protocol::MqttOptions, MqttEvent, QoS};
 use log::{
-    debug, error, info, warn,
-    LevelFilter::{Debug, Info}
+    info, warn,
+    LevelFilter::{Debug, Info},
 };
-use std::{io::Read, time::Duration};
+use std::time::Duration;
 use tokio::{spawn, time::sleep};
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 10)]
@@ -19,10 +15,10 @@ async fn main() -> Result<()> {
         .build_default()
         .log_to_stdout()
         .start();
-    let mut options = MqttOptions::new(
+    let options = MqttOptions::new(
         "abc111".to_string(),
         "broker.emqx.io".to_string(),
-        1883
+        1883,
     )?;
 
     let (_client, mut client_rx) = options
@@ -57,7 +53,7 @@ async fn main() -> Result<()> {
                 },
                 event => {
                     info!("\nMqttEvent：{:?} \n", event);
-                }
+                },
             }
         }
         warn!("**************");
