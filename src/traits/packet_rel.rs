@@ -1,9 +1,12 @@
 use crate::protocol::packet::SubAck;
 use crate::protocol::packet::UnsubAck;
 use crate::protocol::packet::{PubAck, PubComp, PubRec, PubRel};
+use for_event_bus::Event;
 use std::fmt::Debug;
 
-pub trait PacketRel: Clone + Debug + Send + Sync + 'static {
+pub trait PacketRel:
+    Event + Clone + Debug + Send + Sync + 'static
+{
     fn is_rel(&self, packet_id: u16) -> bool;
 }
 

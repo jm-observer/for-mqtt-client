@@ -2,6 +2,7 @@ use super::*;
 use crate::protocol::len_len;
 use anyhow::{bail, Result};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
+use for_event_bus::Event;
 use std::sync::Arc;
 
 impl Default for PubRecReason {
@@ -36,6 +37,15 @@ pub enum PubCommon<Ty: Common> {
     },
 }
 
+impl<Ty: Common> Event for PubCommon<Ty> {
+    fn name() -> &'static str
+    where
+        Self: Sized,
+    {
+        "Event"
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PubCommonProperties {
     pub reason_string: Option<String>,
@@ -64,14 +74,17 @@ impl<Ty: Common> PubCommon<Ty> {
         }
     }
 
-    pub fn set_reason_string(&mut self, reason_string: String) -> Result<()> {
+    pub fn set_reason_string(
+        &mut self,
+        reason_string: String,
+    ) -> Result<()> {
         match self {
             PubCommon::V4 { .. } => {
                 bail!("should not be reached")
-            }
+            },
             PubCommon::V5 { .. } => {
                 bail!("should not be reached")
-            }
+            },
             PubCommon::V5WriteMode {
                 had_reason_string,
                 properties,
@@ -83,18 +96,22 @@ impl<Ty: Common> PubCommon<Ty> {
                 properties.put_u8(PropertyType::ReasonString as u8);
                 write_mqtt_string(properties, reason_string.as_str());
                 Ok(())
-            }
+            },
         }
     }
 
-    pub fn add_user_property(&mut self, key: String, val: String) -> Result<()> {
+    pub fn add_user_property(
+        &mut self,
+        key: String,
+        val: String,
+    ) -> Result<()> {
         match self {
             PubCommon::V4 { .. } => {
                 bail!("should not be reached")
-            }
+            },
             PubCommon::V5 { .. } => {
                 bail!("should not be reached")
-            }
+            },
             PubCommon::V5WriteMode {
                 had_user_properties,
                 properties,
@@ -105,7 +122,7 @@ impl<Ty: Common> PubCommon<Ty> {
                 write_mqtt_string(properties, key.as_str());
                 write_mqtt_string(properties, val.as_str());
                 Ok(())
-            }
+            },
         }
     }
 
@@ -122,9 +139,11 @@ impl<Ty: Common> PubCommon<Ty> {
                 if fixed_header.remaining_len == 2 {
                     return Ok(PubCommon::V4 { packet_id });
                 } else {
-                    return Err(PacketParseError::MalformedRemainingLength);
+                    return Err(
+                        PacketParseError::MalformedRemainingLength,
+                    );
                 }
-            }
+            },
             Protocol::V5 => {
                 if fixed_header.remaining_len == 2 {
                     return Ok(PubCommon::V5 {
@@ -158,7 +177,7 @@ impl<Ty: Common> PubCommon<Ty> {
                         user_properties: properties.user_properties,
                     });
                 }
-            }
+            },
         }
     }
 
@@ -167,7 +186,8 @@ impl<Ty: Common> PubCommon<Ty> {
     ) -> Result<Option<PubCommonProperties>, PacketParseError> {
         let mut reason_string = None;
         let mut user_properties = Vec::new();
-        let (properties_len_len, properties_len) = length(bytes.iter())?;
+        let (properties_len_len, properties_len) =
+            length(bytes.iter())?;
         bytes.advance(properties_len_len);
         if properties_len == 0 {
             return Ok(None);
@@ -182,14 +202,18 @@ impl<Ty: Common> PubCommon<Ty> {
                     let reason = read_mqtt_string(bytes)?;
                     cursor += 2 + reason.len();
                     reason_string = Some(reason);
-                }
+                },
                 38 => {
                     let key = read_mqtt_string(bytes)?;
                     let value = read_mqtt_string(bytes)?;
                     cursor += 2 + key.len() + 2 + value.len();
                     user_properties.push((key, value));
-                }
-                _ => return Err(PacketParseError::InvalidPropertyType(prop)),
+                },
+                _ => {
+                    return Err(
+                        PacketParseError::InvalidPropertyType(prop),
+                    )
+                },
             }
         }
 
@@ -210,10 +234,10 @@ impl<Ty: Common> PubCommon<Ty> {
                 write_remaining_length(buffer, 2);
                 buffer.put_u16(*packet_id);
                 4
-            }
+            },
             PubCommon::V5 { .. } => {
                 unreachable!()
-            }
+            },
             PubCommon::V5WriteMode {
                 packet_id,
                 reason,
@@ -231,7 +255,7 @@ impl<Ty: Common> PubCommon<Ty> {
                 buffer.put_u8(reason.as_u8());
                 write_mqtt_bytes(buffer, properties.as_ref());
                 len + 1 + count
-            }
+            },
         }
     }
 
@@ -240,7 +264,7 @@ impl<Ty: Common> PubCommon<Ty> {
             PubCommon::V4 { .. } => 2,
             PubCommon::V5 { .. } => {
                 unreachable!()
-            }
+            },
             PubCommon::V5WriteMode {
                 reason,
                 had_reason_string,
@@ -248,7 +272,10 @@ impl<Ty: Common> PubCommon<Ty> {
                 properties,
                 ..
             } => {
-                if reason.is_success() && !*had_reason_string && !*had_user_properties {
+                if reason.is_success()
+                    && !*had_reason_string
+                    && !*had_user_properties
+                {
                     return 2;
                 }
                 let mut len = 2 + 1; // packet_id + reason
@@ -258,7 +285,7 @@ impl<Ty: Common> PubCommon<Ty> {
                     len += properties_len_len + properties_len;
                 }
                 len
-            }
+            },
         }
         //
         // if let Some(p) = properties {
@@ -278,12 +305,12 @@ enum PropertyType {
     UserProperty = 38,
 }
 
-pub trait Common {
+pub trait Common: Sync + Send + 'static {
     type Reason: Default + Reason;
     fn reason(num: u8) -> Result<Self::Reason, PacketParseError>;
     fn ty() -> u8;
 }
-pub trait Reason {
+pub trait Reason: Sync + Send + 'static {
     fn is_success(&self) -> bool;
     fn as_u8(&self) -> u8;
 }
@@ -328,7 +355,11 @@ impl Common for PubRecTy {
             145 => PubRecReason::PacketIdentifierInUse,
             151 => PubRecReason::QuotaExceeded,
             153 => PubRecReason::PayloadFormatInvalid,
-            num => return Err(PacketParseError::InvalidConnectReturnCode(num)),
+            num => {
+                return Err(
+                    PacketParseError::InvalidConnectReturnCode(num),
+                )
+            },
         };
 
         Ok(code)
@@ -370,7 +401,11 @@ impl Common for PubRelTy {
         let code = match num {
             0 => PubRelReason::Success,
             146 => PubRelReason::PacketIdentifierNotFound,
-            num => return Err(PacketParseError::InvalidConnectReturnCode(num)),
+            num => {
+                return Err(
+                    PacketParseError::InvalidConnectReturnCode(num),
+                )
+            },
         };
         Ok(code)
     }
@@ -407,7 +442,11 @@ impl Common for PubCompTy {
         let code = match num {
             0 => PubCompReason::Success,
             146 => PubCompReason::PacketIdentifierNotFound,
-            num => return Err(PacketParseError::InvalidConnectReturnCode(num)),
+            num => {
+                return Err(
+                    PacketParseError::InvalidConnectReturnCode(num),
+                )
+            },
         };
         Ok(code)
     }
@@ -459,7 +498,11 @@ impl Common for PubAckTy {
             145 => PubAckReason::PacketIdentifierInUse,
             151 => PubAckReason::QuotaExceeded,
             153 => PubAckReason::PayloadFormatInvalid,
-            num => return Err(PacketParseError::InvalidConnectReturnCode(num)),
+            num => {
+                return Err(
+                    PacketParseError::InvalidConnectReturnCode(num),
+                )
+            },
         };
         Ok(code)
     }

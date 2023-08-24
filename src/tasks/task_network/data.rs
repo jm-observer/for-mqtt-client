@@ -4,29 +4,29 @@ use std::{fmt::Debug, ops::Deref, sync::Arc};
 use tokio::{
     io,
     io::{AsyncReadExt, AsyncWriteExt},
-    net::TcpStream
+    net::TcpStream,
 };
 
 use crate::protocol::{
     packet::{ConnectReturnFailCode, Disconnect},
-    NetworkProtocol, PacketParseError, PacketType
+    NetworkProtocol, PacketParseError, PacketType,
 };
 #[cfg(feature = "tls")]
 use crate::tls::{rustls::init_rustls, TlsConfig};
 use anyhow::Result;
-use for_event_bus::BusError;
+use for_event_bus::{BusError, Event, Merge};
 use log::warn;
 use tokio::sync::{broadcast, mpsc};
 #[cfg(feature = "tls")]
 use tokio_rustls::client::TlsStream;
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum NetworkState {
     ToConnect,
     Connected,
     // 用error来替代后续的状态
     ToDisconnect,
-    Disconnected
+    Disconnected,
 }
 
 impl NetworkState {
@@ -47,7 +47,7 @@ impl NetworkState {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Event)]
 /// broadcast network event
 pub enum NetworkEvent {
     /// bool: session_present
@@ -56,7 +56,7 @@ pub enum NetworkEvent {
     /// 中间突然断开，network task发送后即drop
     ConnectedErr(String),
     /// broker send disconnect packet
-    BrokerDisconnect(Disconnect)
+    BrokerDisconnect(Disconnect),
 }
 //
 // #[derive(Debug, Clone)]
@@ -65,21 +65,27 @@ pub enum NetworkEvent {
 //     DataWaitingToBeSend(Arc<DataWaitingToBeSend>),
 // }
 
-#[derive(Debug)]
+#[derive(Debug, Event, Clone)]
 pub enum HubNetworkCommand {
-    Disconnect
+    Disconnect,
 }
 
-#[derive(Debug)]
+#[derive(Merge, Event)]
+pub enum NetworkData {
+    Command(HubNetworkCommand),
+    Data(DataWaitingToBeSend),
+}
+
+#[derive(Debug, Event, Clone)]
 pub struct DataWaitingToBeSend {
-    pub(crate) data:      Arc<Bytes>,
-    pub(crate) receipter: Option<Receipter>
+    pub(crate) data: Arc<Bytes>,
+    pub(crate) receipter: Option<Arc<Receipter>>,
 }
 
 impl DataWaitingToBeSend {
     pub fn init(
         data: Arc<Bytes>,
-        receipter: Option<Receipter>
+        receipter: Option<Arc<Receipter>>,
     ) -> Self {
         Self { data, receipter }
     }
@@ -109,8 +115,8 @@ pub enum NetworkTasksError {
     #[error("Command disconnect")]
     HubCommandToDisconnect,
     #[error("Connect fail: {0}")]
-    ConnectFail(ToConnectError) /* #[error("BusErr")]
-                                 * BusErr, */
+    ConnectFail(ToConnectError), /* #[error("BusErr")]
+                                  * BusErr, */
 }
 
 // #[derive(Debug, Clone, PartialEq, Eq)]
@@ -133,7 +139,7 @@ pub enum ToConnectError {
     #[error("channel abnormal")]
     ChannelAbnormal,
     #[error("rustls connect err")]
-    RustlsConnectError(String)
+    RustlsConnectError(String),
 }
 impl From<io::Error> for ToConnectError {
     fn from(err: io::Error) -> Self {
@@ -148,7 +154,7 @@ impl From<BusError> for ToConnectError {
             BusError::DowncastErr => {
                 warn!("downcast err");
                 Self::ChannelAbnormal
-            }
+            },
         }
     }
 }
@@ -181,7 +187,7 @@ impl From<BusError> for NetworkTasksError {
             BusError::DowncastErr => {
                 warn!("downcast err");
                 Self::ChannelAbnormal
-            }
+            },
         }
     }
 }
@@ -205,13 +211,13 @@ impl<T> From<mpsc::error::SendError<T>> for ToConnectError {
 pub enum Stream {
     Tcp(TcpStream),
     #[cfg(feature = "tls")]
-    Rustls(TlsStream<TcpStream>)
+    Rustls(TlsStream<TcpStream>),
 }
 
 impl Stream {
     pub async fn read_buf(
         &mut self,
-        buf: &mut BytesMut
+        buf: &mut BytesMut,
     ) -> std::io::Result<usize> {
         match self {
             Stream::Tcp(tcp_stream) => tcp_stream.read_buf(buf).await,
@@ -224,7 +230,7 @@ impl Stream {
 
     pub async fn write_all(
         &mut self,
-        datas: &[u8]
+        datas: &[u8],
     ) -> std::io::Result<()> {
         match self {
             Stream::Tcp(tcp_stream) => {
@@ -240,7 +246,7 @@ impl Stream {
     pub async fn init(
         protocol: NetworkProtocol,
         addr: &String,
-        port: u16
+        port: u16,
     ) -> Result<Self, ToConnectError> {
         Ok(match protocol {
             NetworkProtocol::Tcp => {
@@ -250,12 +256,12 @@ impl Stream {
             },
             #[cfg(feature = "tls")]
             NetworkProtocol::Tls(config) => Self::init_rustls(
-                config, addr, port
+                config, addr, port,
             )
             .await
             .map_err(|x| {
                 ToConnectError::RustlsConnectError(x.to_string())
-            })?
+            })?,
         })
     }
 
@@ -263,7 +269,7 @@ impl Stream {
     async fn init_rustls(
         config: TlsConfig,
         addr: &String,
-        port: u16
+        port: u16,
     ) -> Result<Self> {
         Ok({
             let connector = init_rustls(config)?;

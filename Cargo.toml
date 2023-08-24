@@ -33,6 +33,8 @@ tokio-native-tls = {version = "0.3.1", optional = true}
 webpki = {version = "0.22.0", optional = true}
 
 for_event_bus = "0.1.5"
+for-event-bus-derive = "0.1.2"
+
 [dev-dependencies]
 custom-utils = "0.10.12"
 
@@ -40,9 +42,9 @@ custom-utils = "0.10.12"
  default = ["tls"]
 tls = ["rustls", "rustls-native-certs", "rustls-pemfile", "tokio-rustls", "tokio-native-tls", "webpki"]
 
-#[patch.crates-io]
-#for_event_bus = {path = "../for_event_bus/for-event-bus"}
-
+[patch.crates-io]
+for_event_bus = {path = "../for_event_bus/for-event-bus"}
+for-event-bus-derive = {path = "../for_event_bus/for-event-bus-derive"}
 
 [[example]]
 name = "v3_rustls"

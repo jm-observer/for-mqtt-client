@@ -91,7 +91,11 @@ impl Senders {
     ) -> Result<Receipt, CommonErr> {
         let (receipter, mut rx) = Receipter::default();
         self.tx
-            .dispatch_event(DataWaitingToBeSend::init(bytes.into(), Some(receipter))).await?;
+            .dispatch_event(DataWaitingToBeSend::init(
+                bytes.into(),
+                Some(Arc::new(receipter)),
+            ))
+            .await?;
         Ok(rx.recv().await?)
     }
     // pub async fn tx_network_without_receipt<T: Into<Arc<Bytes>>>(&self, bytes: T) -> Result<()> {

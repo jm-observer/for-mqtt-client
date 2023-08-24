@@ -1,4 +1,5 @@
 use for_event_bus::BusError;
+use for_event_bus_derive::Event;
 use log::warn;
 use std::{
     default::Default,
@@ -8,7 +9,7 @@ use std::{
 use crate::protocol::packet::Publish;
 use tokio::sync::{broadcast, mpsc};
 
-#[derive(Debug)]
+#[derive(Debug, Event)]
 pub enum HubMsg {
     // RequestId(tokio::sync::oneshot::Sender<u16>),
     /// recover packet_id that used to publish/subscribe/unsubscribe

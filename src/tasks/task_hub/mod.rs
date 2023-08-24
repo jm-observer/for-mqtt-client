@@ -5,12 +5,12 @@ pub use unacknowledged::*;
 
 use crate::tasks::{
     task_network::{HubNetworkCommand, NetworkEvent, TaskNetwork},
-    Senders
+    Senders,
 };
 use anyhow::Result;
 use for_event_bus::{
-    EntryOfBus, Event, IdentityOfRx, IdentityOfSimple, IdentityOfTx,
-    SimpleBus, ToWorker, Worker,
+    upcast, BusEvent, EntryOfBus, Event, IdentityOfRx,
+    IdentityOfSimple, IdentityOfTx, SimpleBus, ToWorker, Worker,
 };
 use log::{debug, error, info, warn};
 use ringbuf::{Consumer, Producer};
@@ -189,14 +189,16 @@ impl TaskHub {
         &mut self,
         a: &mut Producer<u16, Arc<SharedRb>>,
         b: &mut Consumer<u16, Arc<SharedRb>>,
-        event: Event,
+        event: BusEvent,
     ) -> Result<(), HubError> {
         // if let Ok(command) =
         // event.clone().downcast::<ClientCommand>() {
         //     self.deal_client_command_when_connected(command.
         // as_ref())         .await?
         // } else
-        if let Ok(command) = event.clone().downcast::<ClientData>() {
+        if let Ok(command) =
+            upcast(event.clone()).downcast::<ClientData>()
+        {
             self.deal_client_data_when_connected(
                 command.as_ref().clone(),
                 b,
@@ -205,7 +207,8 @@ impl TaskHub {
         // } else if let Ok(network_status) =
         // event.clone().downcast::<NetworkEvent>() {
         //     self.update_connected_state_by_network_status(network_status.as_ref())?
-        } else if let Ok(hub_msg) = event.downcast::<HubMsg>() {
+        } else if let Ok(hub_msg) = upcast(event).downcast::<HubMsg>()
+        {
             self.deal_hub_msg(hub_msg.as_ref(), a, b).await?
         } else {
             return Err(HubError::Other(

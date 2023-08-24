@@ -1,9 +1,14 @@
-use crate::protocol::packet::{length, read_mqtt_string, read_u16, read_u8};
-use crate::protocol::{property, FixedHeader, PacketParseError, PropertyType, Protocol};
+use crate::protocol::packet::{
+    length, read_mqtt_string, read_u16, read_u8,
+};
+use crate::protocol::{
+    property, FixedHeader, PacketParseError, PropertyType, Protocol,
+};
 use bytes::{Buf, Bytes};
+use for_event_bus_derive::Event;
 
 /// Acknowledgement to subscribe
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Event)]
 pub enum SubAck {
     V4 {
         packet_id: u16,
@@ -31,7 +36,8 @@ impl SubAck {
     ) -> Result<Self, PacketParseError> {
         let suback = match protocal {
             Protocol::V4 => {
-                let variable_header_index = fixed_header.fixed_header_len;
+                let variable_header_index =
+                    fixed_header.fixed_header_len;
                 bytes.advance(variable_header_index);
                 let packet_id = read_u16(&mut bytes)?;
 
@@ -49,9 +55,10 @@ impl SubAck {
                     packet_id,
                     return_codes,
                 }
-            }
+            },
             Protocol::V5 => {
-                let variable_header_index = fixed_header.fixed_header_len;
+                let variable_header_index =
+                    fixed_header.fixed_header_len;
                 bytes.advance(variable_header_index);
 
                 let packet_id = read_u16(&mut bytes)?;
@@ -72,7 +79,7 @@ impl SubAck {
                     return_codes,
                     properties,
                 }
-            }
+            },
         };
 
         Ok(suback)
@@ -111,11 +118,14 @@ pub struct SubAckProperties {
 }
 
 impl SubAckProperties {
-    pub fn read(bytes: &mut Bytes) -> Result<Option<Self>, PacketParseError> {
+    pub fn read(
+        bytes: &mut Bytes,
+    ) -> Result<Option<Self>, PacketParseError> {
         let mut reason_string = None;
         let mut user_properties = Vec::new();
 
-        let (properties_len_len, properties_len) = length(bytes.iter())?;
+        let (properties_len_len, properties_len) =
+            length(bytes.iter())?;
         bytes.advance(properties_len_len);
         if properties_len == 0 {
             return Ok(None);
@@ -132,14 +142,18 @@ impl SubAckProperties {
                     let reason = read_mqtt_string(bytes)?;
                     cursor += 2 + reason.len();
                     reason_string = Some(reason);
-                }
+                },
                 PropertyType::UserProperty => {
                     let key = read_mqtt_string(bytes)?;
                     let value = read_mqtt_string(bytes)?;
                     cursor += 2 + key.len() + 2 + value.len();
                     user_properties.push((key, value));
-                }
-                _ => return Err(PacketParseError::InvalidPropertyType(prop)),
+                },
+                _ => {
+                    return Err(
+                        PacketParseError::InvalidPropertyType(prop),
+                    )
+                },
             }
         }
 
@@ -150,7 +164,9 @@ impl SubAckProperties {
     }
 }
 
-fn reason_for_v5(code: u8) -> Result<SubscribeReasonCode, PacketParseError> {
+fn reason_for_v5(
+    code: u8,
+) -> Result<SubscribeReasonCode, PacketParseError> {
     let v = match code {
         0 => SubscribeReasonCode::QoS0,
         1 => SubscribeReasonCode::QoS1,
@@ -164,17 +180,27 @@ fn reason_for_v5(code: u8) -> Result<SubscribeReasonCode, PacketParseError> {
         158 => SubscribeReasonCode::SharedSubscriptionsNotSupported,
         161 => SubscribeReasonCode::SubscriptionIdNotSupported,
         162 => SubscribeReasonCode::WildcardSubscriptionsNotSupported,
-        v => return Err(PacketParseError::InvalidSubscribeReasonCode(v)),
+        v => {
+            return Err(PacketParseError::InvalidSubscribeReasonCode(
+                v,
+            ))
+        },
     };
     Ok(v)
 }
-fn reason_for_v4(code: u8) -> Result<SubscribeReasonCode, PacketParseError> {
+fn reason_for_v4(
+    code: u8,
+) -> Result<SubscribeReasonCode, PacketParseError> {
     let v = match code {
         0 => SubscribeReasonCode::QoS0,
         1 => SubscribeReasonCode::QoS1,
         2 => SubscribeReasonCode::QoS2,
         128 => SubscribeReasonCode::Unspecified,
-        v => return Err(PacketParseError::InvalidSubscribeReasonCode(v)),
+        v => {
+            return Err(PacketParseError::InvalidSubscribeReasonCode(
+                v,
+            ))
+        },
     };
     Ok(v)
 }

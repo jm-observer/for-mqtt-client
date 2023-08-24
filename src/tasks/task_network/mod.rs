@@ -2,7 +2,7 @@ use anyhow::Result;
 use std::sync::Arc;
 
 use bytes::{Bytes, BytesMut};
-use for_event_bus::{EntryOfBus, IdentityOfSimple, ToWorker, Worker};
+use for_event_bus::{EntryOfBus, IdentityOfSimple};
 use log::{debug, error, warn};
 use tokio::select;
 
@@ -10,6 +10,7 @@ mod data;
 
 use crate::tasks::task_hub::{HubMsg, HubToConnectError};
 
+use crate::datas::id::Id;
 use crate::protocol::{
     packet::{
         read_from_network, ConnectReturnCode, Disconnect, Packet,
@@ -19,21 +20,18 @@ use crate::protocol::{
 };
 pub use data::*;
 
-#[derive(Clone, Debug)]
-enum Command {}
-
 /// duty: 1. tcp connect
 ///     2. send connect packet
-#[derive(Worker)]
 pub struct TaskNetwork {
+    id: Id,
     addr: String,
     port: u16,
     connect_packet: Bytes,
     state: NetworkState,
     version: Protocol,
     network_protocol: NetworkProtocol,
-    identity_data: IdentityOfSimple<DataWaitingToBeSend>,
-    identity_command: IdentityOfSimple<HubNetworkCommand>,
+    identity_data: IdentityOfSimple<NetworkData>,
+    // identity_command: IdentityOfSimple<HubNetworkCommand>,
 }
 
 /// 一旦断开就不再连接，交由hub去维护后续的连接
@@ -46,13 +44,19 @@ impl TaskNetwork {
         network_protocol: NetworkProtocol,
         bus: &EntryOfBus,
     ) -> Result<Self, HubToConnectError> {
-        let identity_data =
-            bus.simple_login::<Self, DataWaitingToBeSend>().await?;
-        let identity_command =
-            bus.simple_login::<Self, HubNetworkCommand>().await?;
+        let id = Id::default();
+        let identity_data = bus
+            .simple_login_with_name::<NetworkData>(format!(
+                "TaskNetwork {}",
+                id.0
+            ))
+            .await?;
+        // let identity_command =
+        //     bus.simple_login::<Self, HubNetworkCommand>().await?;
         // identity.subscribe::<DataWaitingToBeSend>()?;
         // identity.subscribe::<HubNetworkCommand>()?;
         Ok(Self {
+            id,
             addr,
             port,
             // senders: inner_tx,
@@ -63,7 +67,6 @@ impl TaskNetwork {
             version,
             network_protocol,
             identity_data,
-            identity_command,
         })
     }
 
@@ -372,7 +375,7 @@ impl TaskNetwork {
     async fn deal_inner_msg(
         &mut self,
         stream: &mut Stream,
-        msg: Arc<DataWaitingToBeSend>
+        msg: Arc<DataWaitingToBeSend>,
     ) -> Result<(), NetworkTasksError> {
         let mut to_send_datas = vec![msg];
         while let Ok(Some(data)) = self.identity_data.try_recv() {

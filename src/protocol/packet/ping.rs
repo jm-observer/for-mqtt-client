@@ -1,5 +1,6 @@
 use super::*;
 use bytes::{BufMut, BytesMut};
+use for_event_bus_derive::Event;
 
 pub struct PingReq;
 
@@ -13,7 +14,7 @@ impl PingReq {
         payload.put_slice(&[0xC0, 0x00]);
     }
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Event)]
 pub struct PingResp;
 
 // impl PingResp {

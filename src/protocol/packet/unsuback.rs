@@ -1,10 +1,15 @@
-use crate::protocol::packet::{length, read_mqtt_string, read_u16, read_u8};
-use crate::protocol::{property, FixedHeader, PacketParseError, PropertyType, Protocol};
+use crate::protocol::packet::{
+    length, read_mqtt_string, read_u16, read_u8,
+};
+use crate::protocol::{
+    property, FixedHeader, PacketParseError, PropertyType, Protocol,
+};
 
 use bytes::{Buf, Bytes};
+use for_event_bus_derive::Event;
 
 /// Acknowledgement to subscribe
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Event)]
 pub enum UnsubAck {
     V4 {
         packet_id: u16,
@@ -49,17 +54,20 @@ impl UnsubAck {
     ) -> Result<Self, PacketParseError> {
         let suback = match protocal {
             Protocol::V4 => {
-                let variable_header_index = fixed_header.fixed_header_len;
+                let variable_header_index =
+                    fixed_header.fixed_header_len;
                 bytes.advance(variable_header_index);
                 let packet_id = read_u16(&mut bytes)?;
                 UnsubAck::V4 { packet_id }
-            }
+            },
             Protocol::V5 => {
-                let variable_header_index = fixed_header.fixed_header_len;
+                let variable_header_index =
+                    fixed_header.fixed_header_len;
                 bytes.advance(variable_header_index);
 
                 let packet_id = read_u16(&mut bytes)?;
-                let properties = UnsubAckProperties::read(&mut bytes)?;
+                let properties =
+                    UnsubAckProperties::read(&mut bytes)?;
 
                 if !bytes.has_remaining() {
                     return Err(PacketParseError::MalformedPacket);
@@ -76,7 +84,7 @@ impl UnsubAck {
                     return_codes,
                     properties,
                 }
-            }
+            },
         };
 
         Ok(suback)
@@ -84,11 +92,14 @@ impl UnsubAck {
 }
 
 impl UnsubAckProperties {
-    pub fn read(bytes: &mut Bytes) -> Result<Option<Self>, PacketParseError> {
+    pub fn read(
+        bytes: &mut Bytes,
+    ) -> Result<Option<Self>, PacketParseError> {
         let mut reason_string = None;
         let mut user_properties = Vec::new();
 
-        let (properties_len_len, properties_len) = length(bytes.iter())?;
+        let (properties_len_len, properties_len) =
+            length(bytes.iter())?;
         bytes.advance(properties_len_len);
         if properties_len == 0 {
             return Ok(None);
@@ -105,14 +116,18 @@ impl UnsubAckProperties {
                     let reason = read_mqtt_string(bytes)?;
                     cursor += 2 + reason.len();
                     reason_string = Some(reason);
-                }
+                },
                 PropertyType::UserProperty => {
                     let key = read_mqtt_string(bytes)?;
                     let value = read_mqtt_string(bytes)?;
                     cursor += 2 + key.len() + 2 + value.len();
                     user_properties.push((key, value));
-                }
-                _ => return Err(PacketParseError::InvalidPropertyType(prop)),
+                },
+                _ => {
+                    return Err(
+                        PacketParseError::InvalidPropertyType(prop),
+                    )
+                },
             }
         }
 
@@ -124,7 +139,9 @@ impl UnsubAckProperties {
 }
 
 /// Connection return code type
-fn reason_for_v5(num: u8) -> Result<UnsubAckReason, PacketParseError> {
+fn reason_for_v5(
+    num: u8,
+) -> Result<UnsubAckReason, PacketParseError> {
     let code = match num {
         0x00 => UnsubAckReason::Success,
         0x11 => UnsubAckReason::NoSubscriptionExisted,
@@ -133,7 +150,11 @@ fn reason_for_v5(num: u8) -> Result<UnsubAckReason, PacketParseError> {
         0x87 => UnsubAckReason::NotAuthorized,
         0x8F => UnsubAckReason::TopicFilterInvalid,
         0x91 => UnsubAckReason::PacketIdentifierInUse,
-        num => return Err(PacketParseError::InvalidSubscribeReasonCode(num)),
+        num => {
+            return Err(PacketParseError::InvalidSubscribeReasonCode(
+                num,
+            ))
+        },
     };
 
     Ok(code)
