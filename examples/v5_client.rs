@@ -1,9 +1,6 @@
 use anyhow::Result;
 use for_mqtt_client::{protocol::MqttOptions, MqttEvent, QoS};
-use log::{
-    info, warn,
-    LevelFilter::{Debug, Info},
-};
+use log::{info, warn, LevelFilter::Debug};
 use std::time::Duration;
 use tokio::{spawn, time::sleep};
 
@@ -18,7 +15,7 @@ async fn main() -> Result<()> {
     let options = MqttOptions::new(
         "abc111".to_string(),
         "broker.emqx.io".to_string(),
-        1883,
+        1883
     )?;
 
     let (_client, mut client_rx) = options
@@ -53,7 +50,7 @@ async fn main() -> Result<()> {
                 },
                 event => {
                     info!("\nMqttEvent：{:?} \n", event);
-                },
+                }
             }
         }
         warn!("**************");

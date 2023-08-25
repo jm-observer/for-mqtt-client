@@ -5,12 +5,12 @@ pub use unacknowledged::*;
 
 use crate::tasks::{
     task_network::{HubNetworkCommand, NetworkEvent, TaskNetwork},
-    Senders,
+    Senders
 };
 use anyhow::Result;
 use for_event_bus::{
-    upcast, BusEvent, EntryOfBus, Event, IdentityOfRx,
-    IdentityOfSimple, IdentityOfTx, SimpleBus, ToWorker, Worker,
+    upcast, BusEvent, EntryOfBus, IdentityOfRx, IdentityOfSimple,
+    IdentityOfTx, SimpleBus, ToWorker, Worker
 };
 use log::{debug, error, info, warn};
 use ringbuf::{Consumer, Producer};
@@ -18,25 +18,25 @@ use std::{
     collections::{HashMap, VecDeque},
     mem::MaybeUninit,
     sync::Arc,
-    time::Duration,
+    time::Duration
 };
 use tokio::{select, spawn, time::sleep};
 
 use crate::{
     protocol::{
         packet::{Connect, Publish},
-        MqttOptions, Protocol,
+        MqttOptions, Protocol
     },
     tasks::{
         task_client::{data::MqttEvent, Client, ClientRx},
         task_ping::TaskPing,
         task_publish::{
             TaskPublishQos0, TaskPublishQos1, TaskPublishQos2,
-            TaskPublishRxQos1, TaskPublishRxQos2,
+            TaskPublishRxQos1, TaskPublishRxQos2
         },
-        task_subscribe::{TaskSubscribe, TaskUnsubscribe},
+        task_subscribe::{TaskSubscribe, TaskUnsubscribe}
     },
-    ClientCommand, ClientData, QoSWithPacketId,
+    ClientCommand, ClientData, QoSWithPacketId
 };
 pub use data::*;
 
@@ -44,24 +44,24 @@ type SharedRb = ringbuf::SharedRb<u16, Vec<MaybeUninit<u16>>>;
 
 #[derive(Worker)]
 pub struct TaskHub {
-    protocol: Protocol,
-    options: MqttOptions,
-    state: HubState,
-    bus: EntryOfBus,
-    identity: IdentityOfRx,
+    protocol:         Protocol,
+    options:          MqttOptions,
+    state:            HubState,
+    bus:              EntryOfBus,
+    identity:         IdentityOfRx,
     identity_command: IdentityOfSimple<ClientCommand>,
     identity_network: IdentityOfSimple<NetworkEvent>,
     // tx_to_user: Sender<MqttEvent>,
-    rx_publish: HashMap<u16, Publish>,
-    rx_publish_id: HashMap<u16, u16>,
-    client_data: VecDeque<UnacknowledgedClientData>, /* rx_client_data: mpsc::Receiver<ClientData>,
-                                                      * rx_client_command: mpsc::Receiver<ClientCommand>, */
+    rx_publish:       HashMap<u16, Publish>,
+    rx_publish_id:    HashMap<u16, u16>,
+    client_data:      VecDeque<UnacknowledgedClientData> /* rx_client_data: mpsc::Receiver<ClientData>,
+                                                          * rx_client_command: mpsc::Receiver<ClientCommand>, */
 }
 
 impl TaskHub {
     pub async fn connect(
         options: MqttOptions,
-        protocol: Protocol,
+        protocol: Protocol
     ) -> Result<(Client, ClientRx), HubError> {
         let bus = SimpleBus::init();
         let identity = bus.login::<Self>().await?;
@@ -83,7 +83,7 @@ impl TaskHub {
             bus,
             identity,
             identity_command,
-            identity_network,
+            identity_network
         };
 
         spawn(async move {
@@ -113,7 +113,7 @@ impl TaskHub {
     async fn run(
         &mut self,
         a: &mut Producer<u16, Arc<SharedRb>>,
-        b: &mut Consumer<u16, Arc<SharedRb>>,
+        b: &mut Consumer<u16, Arc<SharedRb>>
     ) -> Result<(), HubError> {
         // let (mut senders, mut rx_hub_msg, mut rx_hub_network_event)
         // = (None, None, None);
@@ -152,10 +152,10 @@ impl TaskHub {
                             } else {
                                 self.state = HubState::Disconnected;
                             }
-                        },
+                        }
                     }
                 },
-                HubState::Disconnected => return Ok(()),
+                HubState::Disconnected => return Ok(())
             }
         }
     }
@@ -163,7 +163,7 @@ impl TaskHub {
     async fn run_connected(
         &mut self,
         a: &mut Producer<u16, Arc<SharedRb>>,
-        b: &mut Consumer<u16, Arc<SharedRb>>,
+        b: &mut Consumer<u16, Arc<SharedRb>>
     ) -> Result<(), HubError> {
         debug!("run_connected");
         loop {
@@ -189,7 +189,7 @@ impl TaskHub {
         &mut self,
         a: &mut Producer<u16, Arc<SharedRb>>,
         b: &mut Consumer<u16, Arc<SharedRb>>,
-        event: BusEvent,
+        event: BusEvent
     ) -> Result<(), HubError> {
         // if let Ok(command) =
         // event.clone().downcast::<ClientCommand>() {
@@ -201,7 +201,7 @@ impl TaskHub {
         {
             self.deal_client_data_when_connected(
                 command.as_ref().clone(),
-                b,
+                b
             )
             .await?
         // } else if let Ok(network_status) =
@@ -212,7 +212,7 @@ impl TaskHub {
             self.deal_hub_msg(hub_msg.as_ref(), a, b).await?
         } else {
             return Err(HubError::Other(
-                "should not be reached".to_string(),
+                "should not be reached".to_string()
             ));
         }
         Ok(())
@@ -220,7 +220,7 @@ impl TaskHub {
 
     async fn update_connected_state_by_network_status(
         &mut self,
-        state: &NetworkEvent,
+        state: &NetworkEvent
     ) -> Result<(), HubError> {
         debug!("update_state: {:?}", state);
         match state {
@@ -229,12 +229,12 @@ impl TaskHub {
                 // clone()))?;
                 self.identity
                     .dispatch_event(MqttEvent::ConnectedErr(
-                        msg.clone(),
+                        msg.clone()
                     ))
                     .await?;
 
                 self.state = HubState::ToDisconnect(
-                    ToDisconnectReason::NetworkErr(msg.clone()),
+                    ToDisconnectReason::NetworkErr(msg.clone())
                 );
                 // if self.options.auto_reconnect {
                 //     self.state = HubState::ToConnect;
@@ -261,14 +261,14 @@ impl TaskHub {
                 } else {
                     self.state = HubState::Disconnected;
                 }
-            },
+            }
         }
         Ok(())
     }
 
     ///
     async fn run_to_connect(
-        &mut self,
+        &mut self
     ) -> Result<(), HubToConnectError> {
         let mut first = true;
         loop {
@@ -293,11 +293,11 @@ impl TaskHub {
                 addr,
                 port,
                 Connect::new(&self.options, self.protocol).map_err(
-                    |x| HubToConnectError::Other(x.to_string()),
+                    |x| HubToConnectError::Other(x.to_string())
                 )?,
                 self.protocol.clone(),
                 self.options.network_protocol.clone(),
-                &self.bus,
+                &self.bus
             )
             .await?
             .run();
@@ -311,7 +311,7 @@ impl TaskHub {
 
                     self.identity
                         .dispatch_event(MqttEvent::ConnectSuccess(
-                            *session_present,
+                            *session_present
                         ))
                         .await?;
 
@@ -331,7 +331,7 @@ impl TaskHub {
                     info!("connect fail: {:?}", reason);
                     self.identity
                         .dispatch_event(MqttEvent::ConnectFail(
-                            reason.clone(),
+                            reason.clone()
                         ))
                         .await?;
 
@@ -340,7 +340,7 @@ impl TaskHub {
                     } else {
                         self.state = HubState::Disconnected;
                         return Err(
-                            HubToConnectError::ChannelAbnormal,
+                            HubToConnectError::ChannelAbnormal
                         );
                     }
                 },
@@ -349,7 +349,7 @@ impl TaskHub {
 
                     self.identity
                         .dispatch_event(MqttEvent::ConnectedErr(
-                            format!("{:?}", packet),
+                            format!("{:?}", packet)
                         ))
                         .await?;
 
@@ -358,10 +358,10 @@ impl TaskHub {
                     } else {
                         self.state = HubState::Disconnected;
                         return Err(
-                            HubToConnectError::ChannelAbnormal,
+                            HubToConnectError::ChannelAbnormal
                         );
                     }
-                },
+                }
             }
         }
     }
@@ -370,7 +370,7 @@ impl TaskHub {
         &mut self,
         req: &HubMsg,
         a: &mut Producer<u16, Arc<SharedRb>>,
-        _b: &mut Consumer<u16, Arc<SharedRb>>,
+        _b: &mut Consumer<u16, Arc<SharedRb>>
     ) -> Result<(), HubError> {
         match req {
             HubMsg::RecoverId(id) => {
@@ -379,18 +379,16 @@ impl TaskHub {
                     .client_data
                     .iter_mut()
                     .enumerate()
-                    .find(|(_index, obj)| {
-                        obj.packet_id() == *id
-                    }) else
-                {
-                    return Ok(())
+                    .find(|(_index, obj)| obj.packet_id() == *id)
+                else {
+                    return Ok(());
                 };
                 if obj.acknowledge() {
                     self.client_data.remove(index);
                     self.init_keep_alive_check();
                     a.push(*id).map_err(|_x| {
                         HubError::PacketIdErr(
-                            "RecoverId Err".to_string(),
+                            "RecoverId Err".to_string()
                         )
                     })?;
                 } else {
@@ -403,11 +401,11 @@ impl TaskHub {
             HubMsg::PingFail => {
                 // 需要再看看文档，看如何处理
                 self.state = HubState::ToDisconnect(
-                    ToDisconnectReason::PingFail,
+                    ToDisconnectReason::PingFail
                 );
                 self.identity
                     .dispatch_event(MqttEvent::ConnectedErr(
-                        "ping fail".to_string(),
+                        "ping fail".to_string()
                     ))
                     .await?;
             },
@@ -422,7 +420,7 @@ impl TaskHub {
                     // self.tx_to_user.send(publish.into())?;
                     self.identity
                         .dispatch_event(MqttEvent::Publish(
-                            publish.clone(),
+                            publish.clone()
                         ))
                         .await?;
                 },
@@ -438,7 +436,7 @@ impl TaskHub {
                         TaskPublishRxQos1::init(
                             self.bus.clone(),
                             id,
-                            self.protocol,
+                            self.protocol
                         )
                         .await?;
                     }
@@ -453,13 +451,13 @@ impl TaskHub {
                         TaskPublishRxQos2::init(
                             self.bus.clone(),
                             id,
-                            publish.protocol,
+                            publish.protocol
                         )
                         .await?;
                         self.rx_publish.insert(id, publish.clone());
                         self.rx_publish_id.insert(id, id);
                     }
-                },
+                }
             },
             HubMsg::AffirmRxId(id) => {
                 if self.rx_publish_id.remove(&id).is_none() {
@@ -475,7 +473,7 @@ impl TaskHub {
                 } else {
                     warn!("could not AffirmRxPublish {}", id);
                 }
-            },
+            }
         }
         Ok(())
     }
@@ -483,7 +481,7 @@ impl TaskHub {
     async fn deal_client_data_when_connected(
         &mut self,
         req: ClientData,
-        b: &mut Consumer<u16, Arc<SharedRb>>,
+        b: &mut Consumer<u16, Arc<SharedRb>>
     ) -> Result<(), HubError> {
         match req {
             ClientData::Subscribe(mut trace_subscribe) => {
@@ -492,7 +490,7 @@ impl TaskHub {
                     .push_back(trace_subscribe.clone().into());
                 TaskSubscribe::init(
                     self.bus.clone(),
-                    trace_subscribe.clone(),
+                    trace_subscribe.clone()
                 )
                 .await?;
             },
@@ -502,14 +500,14 @@ impl TaskHub {
                     .push_back(trace_unsubscribe.clone().into());
                 TaskUnsubscribe::init(
                     self.bus.clone(),
-                    trace_unsubscribe.clone(),
+                    trace_unsubscribe.clone()
                 )
                 .await?;
             },
             ClientData::PublishQoS0(packet) => {
                 TaskPublishQos0::init(
                     Senders::init(self.identity.tx()),
-                    packet.clone(),
+                    packet.clone()
                 )
                 .await;
             },
@@ -524,26 +522,26 @@ impl TaskHub {
                 self.client_data.push_back(packet.clone().into());
                 TaskPublishQos2::init(self.bus.clone(), packet)
                     .await?;
-            },
+            }
         }
         Ok(())
     }
 
     async fn deal_client_command_when_connected(
         &mut self,
-        command: &ClientCommand,
+        command: &ClientCommand
     ) -> Result<(), HubError> {
         debug!("deal_client_command_when_connected: {:?}", command);
         match command {
             ClientCommand::DisconnectAndDrop => {
                 self.state = HubState::ToDisconnect(
-                    ToDisconnectReason::ClientCommand,
+                    ToDisconnectReason::ClientCommand
                 );
             },
             ClientCommand::ViolenceDisconnectAndDrop => {
                 self.state = HubState::Disconnected;
                 return Err(HubError::ViolenceDisconnectAndDrop);
-            },
+            }
         }
         Ok(())
     }
@@ -554,13 +552,13 @@ impl TaskHub {
         init_keep_alive_check(
             KeepAliveTime::default(),
             self.options.keep_alive(),
-            self.identity.tx(),
+            self.identity.tx()
         );
     }
 
     /// bool: if rx command
     async fn try_deal_client_command_when_to_connect(
-        &mut self,
+        &mut self
     ) -> Result<(), HubToConnectError> {
         loop {
             if let Some(command) = self.identity_command.try_recv()? {
@@ -571,7 +569,7 @@ impl TaskHub {
                     ClientCommand::ViolenceDisconnectAndDrop => {
                         self.state = HubState::Disconnected;
                         return Err(HubToConnectError::ViolenceDisconnectAndDrop);
-                    },
+                    }
                 }
             } else {
                 break;
@@ -584,7 +582,7 @@ impl TaskHub {
 fn init_keep_alive_check(
     time: KeepAliveTime,
     keep_alive: u16,
-    tx: IdentityOfTx,
+    tx: IdentityOfTx
 ) {
     spawn(async move {
         sleep(Duration::from_secs(keep_alive as u64)).await;

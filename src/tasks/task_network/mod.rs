@@ -1,8 +1,7 @@
 use anyhow::Result;
-use std::sync::Arc;
 
 use bytes::{Bytes, BytesMut};
-use for_event_bus::{EntryOfBus, IdentityOfSimple};
+use for_event_bus::{EntryOfBus, IdentityOfMerge};
 use log::{debug, error, warn};
 use tokio::select;
 
@@ -10,28 +9,29 @@ mod data;
 
 use crate::tasks::task_hub::{HubMsg, HubToConnectError};
 
-use crate::datas::id::Id;
-use crate::protocol::{
-    packet::{
-        read_from_network, ConnectReturnCode, Disconnect, Packet,
-        PingResp,
-    },
-    NetworkProtocol, Protocol,
+use crate::{
+    datas::id::Id,
+    protocol::{
+        packet::{
+            read_from_network, ConnectReturnCode, Disconnect, Packet,
+            PingResp
+        },
+        NetworkProtocol, Protocol
+    }
 };
 pub use data::*;
 
 /// duty: 1. tcp connect
 ///     2. send connect packet
 pub struct TaskNetwork {
-    id: Id,
-    addr: String,
-    port: u16,
-    connect_packet: Bytes,
-    state: NetworkState,
-    version: Protocol,
+    id:               Id,
+    addr:             String,
+    port:             u16,
+    connect_packet:   Bytes,
+    state:            NetworkState,
+    version:          Protocol,
     network_protocol: NetworkProtocol,
-    identity_data: IdentityOfSimple<NetworkData>,
-    // identity_command: IdentityOfSimple<HubNetworkCommand>,
+    identity_data:    IdentityOfMerge<NetworkData> /* identity_command: IdentityOfSimple<HubNetworkCommand>, */
 }
 
 /// 一旦断开就不再连接，交由hub去维护后续的连接
@@ -42,11 +42,11 @@ impl TaskNetwork {
         connect_packet: Bytes,
         version: Protocol,
         network_protocol: NetworkProtocol,
-        bus: &EntryOfBus,
+        bus: &EntryOfBus
     ) -> Result<Self, HubToConnectError> {
         let id = Id::default();
         let identity_data = bus
-            .simple_login_with_name::<NetworkData>(format!(
+            .merge_login_with_name::<NetworkData>(format!(
                 "TaskNetwork {}",
                 id.0
             ))
@@ -66,7 +66,7 @@ impl TaskNetwork {
             // rx_hub_network_command,
             version,
             network_protocol,
-            identity_data,
+            identity_data
         })
     }
 
@@ -79,7 +79,7 @@ impl TaskNetwork {
                         if let Err(e) = self
                             .identity_data
                             .dispatch_event(
-                                NetworkEvent::ConnectedErr(msg),
+                                NetworkEvent::ConnectedErr(msg)
                             )
                             .await
                         {
@@ -90,7 +90,7 @@ impl TaskNetwork {
                         if let Err(e) = self
                             .identity_data
                             .dispatch_event(
-                                NetworkEvent::ConnectFail(reason),
+                                NetworkEvent::ConnectFail(reason)
                             )
                             .await
                         {
@@ -102,9 +102,7 @@ impl TaskNetwork {
                     },
                     NetworkTasksError::HubCommandToDisconnect => {
                         warn!("should not be reached")
-                    }, /* NetworkTasksError::BusErr => {
-                        *     error!("NetworkTasksError::BusErr")
-                        * } */
+                    }
                 }
             }
         });
@@ -140,7 +138,7 @@ impl TaskNetwork {
     async fn run_connected(
         &mut self,
         stream: &mut Stream,
-        buf: &mut BytesMut,
+        buf: &mut BytesMut
     ) -> Result<(), NetworkTasksError> {
         loop {
             if !self.state.is_connected() {
@@ -154,11 +152,11 @@ impl TaskNetwork {
                     self.deal_connected_network_packet(buf).await?;
                 },
                 val = self.identity_data.recv() => {
-                    self.deal_inner_msg(stream, val?).await?;
+                    self.deal_network_data(stream, val?).await?;
                 }
-                command = self.identity_command.recv() => {
-                    self.deal_hub_network_command(command?.as_ref())?;
-                }
+                // command = self.identity_command.recv() => {
+                //     self.deal_hub_network_command(command?.as_ref())?;
+                // }
             }
         }
     }
@@ -180,7 +178,7 @@ impl TaskNetwork {
 
     async fn run_to_disconnected(
         &mut self,
-        stream: &mut Stream,
+        stream: &mut Stream
     ) -> Result<(), NetworkTasksError> {
         stream
             .write_all(Disconnect::new(self.version).data().as_ref())
@@ -192,12 +190,12 @@ impl TaskNetwork {
     ///
     async fn run_to_connect(
         &mut self,
-        buf: &mut BytesMut,
+        buf: &mut BytesMut
     ) -> Result<Stream, ToConnectError> {
         let mut stream = Stream::init(
             self.network_protocol.clone(),
             &self.addr,
-            self.port,
+            self.port
         )
         .await?;
         // let mut stream = TcpStream::connect((self.addr.as_str(),
@@ -215,7 +213,7 @@ impl TaskNetwork {
     async fn _run_to_connect(
         &mut self,
         stream: &mut Stream,
-        buf: &mut BytesMut,
+        buf: &mut BytesMut
     ) -> Result<bool, ToConnectError> {
         stream.write_all(self.connect_packet.as_ref()).await?;
         let packet;
@@ -223,10 +221,12 @@ impl TaskNetwork {
             let len = stream.read_buf(buf).await?;
             if len == 0 {
                 return Err(ToConnectError::NetworkError(
-                    "TimeOut".to_string(),
+                    "TimeOut".to_string()
                 ));
             }
-            let Some(packet_tmp) = read_from_network(buf, self.version)? else {
+            let Some(packet_tmp) =
+                read_from_network(buf, self.version)?
+            else {
                 continue;
             };
             packet = packet_tmp;
@@ -246,7 +246,7 @@ impl TaskNetwork {
 
     async fn deal_connected_network_packet(
         &mut self,
-        buf: &mut BytesMut,
+        buf: &mut BytesMut
     ) -> Result<(), NetworkTasksError> {
         loop {
             match read_from_network(buf, self.version) {
@@ -262,7 +262,7 @@ impl TaskNetwork {
                             if self
                                 .identity_data
                                 .dispatch_event(HubMsg::RxPublish(
-                                    packet,
+                                    packet
                                 ))
                                 .await
                                 .is_err()
@@ -346,8 +346,8 @@ impl TaskNetwork {
                             self.identity_data
                                 .dispatch_event(
                                     NetworkEvent::BrokerDisconnect(
-                                        packet,
-                                    ),
+                                        packet
+                                    )
                                 )
                                 .await?
                         },
@@ -356,13 +356,13 @@ impl TaskNetwork {
                         // Packet::Unsubscribe(_) => {}
                         packet => {
                             error!("should not be rx: {:?}", packet);
-                        },
+                        }
                     };
                 },
                 Err(err) => {
                     warn!("{:?}", err);
                     return Ok(());
-                },
+                }
             }
             if buf.len() >= 2 {
                 continue;
@@ -372,22 +372,38 @@ impl TaskNetwork {
         }
     }
 
+    async fn deal_network_data(
+        &mut self,
+        stream: &mut Stream,
+        msg: NetworkData
+    ) -> Result<(), NetworkTasksError> {
+        match msg {
+            NetworkData::Command(command) => {
+                self.deal_hub_network_command(&command)
+            },
+            NetworkData::Data(data) => {
+                self.deal_inner_msg(stream, data).await
+            },
+        }
+    }
+
     async fn deal_inner_msg(
         &mut self,
         stream: &mut Stream,
-        msg: Arc<DataWaitingToBeSend>,
+        msg: DataWaitingToBeSend
     ) -> Result<(), NetworkTasksError> {
-        let mut to_send_datas = vec![msg];
-        while let Ok(Some(data)) = self.identity_data.try_recv() {
-            to_send_datas.push(data);
-        }
+        // let mut to_send_datas = vec![msg];
+        // while let Ok(Some(data)) = self.identity_data.try_recv() {
+        //     to_send_datas.push(data);
+        // }
         // todo packet too big?
-        for data in to_send_datas.iter() {
-            stream.write_all(data.data.as_ref()).await?;
-        }
-        for data in to_send_datas {
-            data.as_ref().done();
-        }
+        // for data in to_send_datas.iter() {
+        stream.write_all(msg.data.as_ref()).await?;
+        msg.done();
+        // }
+        // for data in to_send_datas {
+        //     data.as_ref().done();
+        // }
         Ok(())
     }
 
@@ -405,13 +421,17 @@ impl TaskNetwork {
     // }
     fn deal_hub_network_command(
         &mut self,
-        command: &HubNetworkCommand,
+        command: &HubNetworkCommand
     ) -> Result<(), NetworkTasksError> {
         match command {
             HubNetworkCommand::Disconnect => {
+                debug!(
+                    "task network {} recv disconnect from client",
+                    self.id.0
+                );
                 self.state = NetworkState::ToDisconnect;
                 Err(NetworkTasksError::HubCommandToDisconnect)
-            },
+            }
         }
     }
 }
