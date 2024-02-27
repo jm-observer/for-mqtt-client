@@ -1,17 +1,21 @@
 use super::*;
-use crate::protocol::packet::{
-    read_mqtt_bytes, read_mqtt_string, write_mqtt_bytes, write_mqtt_string, write_remaining_length,
+use crate::protocol::{
+    len_len,
+    packet::{
+        read_mqtt_bytes, read_mqtt_string, write_mqtt_bytes,
+        write_mqtt_string, write_remaining_length
+    },
+    PacketParseError
 };
-use crate::protocol::{len_len, PacketParseError};
 
 /// LastWill that broker forwards on behalf of the client
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LastWill {
-    pub topic: String,
-    pub message: Bytes,
-    pub qos: QoS,
-    pub retain: bool,
-    pub properties: Option<LastWillProperties>,
+    pub topic:      String,
+    pub message:    Bytes,
+    pub qos:        QoS,
+    pub retain:     bool,
+    pub properties: Option<LastWillProperties>
 }
 
 impl LastWill {
@@ -19,16 +23,17 @@ impl LastWill {
         topic: impl Into<String>,
         payload: impl Into<Vec<u8>>,
         qos: QoS,
-        retain: bool,
+        retain: bool
     ) -> LastWill {
         LastWill {
             topic: topic.into(),
             message: Bytes::from(payload.into()),
             qos,
             retain,
-            properties: None,
+            properties: None
         }
     }
+
     pub fn len(&self) -> usize {
         let mut len = 0;
 
@@ -41,18 +46,18 @@ impl LastWill {
             len += 1;
         }
 
-        len += 2 + &self.topic.len() + 2 + &self.message.len();
+        len += 2 + self.topic.len() + 2 + self.message.len();
         len
     }
 
     pub fn read(
         connect_flags: u8,
-        bytes: &mut Bytes,
+        bytes: &mut Bytes
     ) -> Result<Option<LastWill>, PacketParseError> {
         let o = match connect_flags & 0b100 {
             0 if (connect_flags & 0b0011_1000) != 0 => {
                 return Err(PacketParseError::IncorrectPacketFormat);
-            }
+            },
             0 => None,
             _ => {
                 // Properties in variable header
@@ -62,21 +67,23 @@ impl LastWill {
                 let will_message = read_mqtt_bytes(bytes)?;
                 let qos_num = (connect_flags & 0b11000) >> 3;
                 let will_qos = qos(qos_num)?;
-                let will = Some(LastWill {
+                Some(LastWill {
                     topic: will_topic,
                     message: will_message,
                     qos: will_qos,
                     retain: (connect_flags & 0b0010_0000) != 0,
-                    properties,
-                });
-                will
+                    properties
+                })
             }
         };
 
         Ok(o)
     }
 
-    pub fn write(&self, buffer: &mut BytesMut) -> Result<u8, PacketParseError> {
+    pub fn write(
+        &self,
+        buffer: &mut BytesMut
+    ) -> Result<u8, PacketParseError> {
         let mut connect_flags = 0;
 
         connect_flags |= 0x04 | (self.qos as u8) << 3;

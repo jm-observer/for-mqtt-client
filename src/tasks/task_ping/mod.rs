@@ -34,7 +34,7 @@ impl TaskPing {
     }
 
     async fn run(&mut self) -> Result<(), CommonErr> {
-        let data = Arc::new(PingReq::new());
+        let data = Arc::new(PingReq::bytes());
         // self.rx.subscribe::<PingResp>()?;
         // let mut rx_ack = self.tx.subscribe_ping();
         let mut timeout_time = 3;

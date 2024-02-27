@@ -5,11 +5,12 @@ use for_event_bus_derive::Event;
 pub struct PingReq;
 
 impl PingReq {
-    pub fn new() -> Bytes {
+    pub fn bytes() -> Bytes {
         let mut bytes = BytesMut::new();
         PingReq.write(&mut bytes);
         bytes.freeze()
     }
+
     fn write(&self, payload: &mut BytesMut) {
         payload.put_slice(&[0xC0, 0x00]);
     }

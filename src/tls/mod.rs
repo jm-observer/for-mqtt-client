@@ -7,17 +7,17 @@ pub mod rustls;
 #[derive(Debug, Clone, Default)]
 pub struct TlsConfig {
     verify_server: VerifyServer,
-    verify_client: VerifyClient,
+    verify_client: VerifyClient
 }
 
 impl TlsConfig {
     pub fn set_server_ca_pem_file(
         mut self,
-        ca_file: PathBuf,
+        ca_file: PathBuf
     ) -> Self {
         self.verify_server = VerifyServer::SelfSigned {
             verify_dns_name: self.verify_server.verify_dns_name(),
-            ca_file: CertificateFile::Pem(ca_file),
+            ca_file:         CertificateFile::Pem(ca_file)
         };
         self
     }
@@ -31,18 +31,30 @@ impl TlsConfig {
         self.verify_server = VerifyServer::Insecurity;
         self
     }
+
+    pub fn verify_client(
+        mut self,
+        certificate_file: CertificateFile,
+        key_file: PrivateKeyFile
+    ) -> Self {
+        self.verify_client = VerifyClient::Verify {
+            certificate_file,
+            key_file
+        };
+        self
+    }
 }
 
 #[derive(Debug, Clone)]
 pub enum VerifyServer {
     CA {
-        verify_dns_name: bool,
+        verify_dns_name: bool
     },
     SelfSigned {
         verify_dns_name: bool,
-        ca_file: CertificateFile,
+        ca_file:         CertificateFile
     },
-    Insecurity,
+    Insecurity
 }
 
 impl VerifyServer {
@@ -52,9 +64,10 @@ impl VerifyServer {
             VerifyServer::SelfSigned {
                 verify_dns_name, ..
             } => *verify_dns_name,
-            VerifyServer::Insecurity => false,
+            VerifyServer::Insecurity => false
         }
     }
+
     pub fn set_verify_dns_name(&mut self, verify: bool) {
         match self {
             VerifyServer::CA { verify_dns_name } => {
@@ -63,7 +76,7 @@ impl VerifyServer {
             VerifyServer::SelfSigned {
                 verify_dns_name, ..
             } => *verify_dns_name = verify,
-            _ => {},
+            _ => {}
         }
     }
 }
@@ -73,8 +86,8 @@ pub enum VerifyClient {
     No,
     Verify {
         certificate_file: CertificateFile,
-        key_file: PrivateKeyFile,
-    },
+        key_file:         PrivateKeyFile
+    }
 }
 
 impl Default for VerifyClient {
@@ -85,34 +98,34 @@ impl Default for VerifyClient {
 impl Default for VerifyServer {
     fn default() -> Self {
         Self::CA {
-            verify_dns_name: false,
+            verify_dns_name: false
         }
     }
 }
 
 #[derive(Debug, Clone)]
 pub enum CertificateFile {
-    Pem(PathBuf),
+    Pem(PathBuf)
 }
 
 impl CertificateFile {
     pub fn load(&self) -> Result<Vec<Vec<u8>>> {
         match self {
-            CertificateFile::Pem(path) => load_pem_certs(path),
+            CertificateFile::Pem(path) => load_pem_certs(path)
         }
     }
 }
 #[derive(Debug, Clone)]
 pub enum PrivateKeyFile {
     Rsa(PathBuf),
-    Pkcs8(PathBuf),
+    Pkcs8(PathBuf)
 }
 
 impl PrivateKeyFile {
     pub fn load(&self) -> Result<Option<Vec<u8>>> {
         let mut datas = match self {
             PrivateKeyFile::Rsa(path) => load_rsa_key(path)?,
-            PrivateKeyFile::Pkcs8(path) => load_pkcs8_key(path)?,
+            PrivateKeyFile::Pkcs8(path) => load_pkcs8_key(path)?
         };
         if datas.len() >= 1 {
             Ok(Some(datas.remove(0)))

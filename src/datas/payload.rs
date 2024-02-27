@@ -1,24 +1,27 @@
 use bytes::Bytes;
-use std::fmt::{Debug, Formatter};
-use std::sync::Arc;
+use std::{
+    fmt::{Debug, Formatter},
+    sync::Arc
+};
 
 #[derive(Clone, PartialEq, Eq)]
 pub enum Payload {
     String(Arc<String>),
-    Bytes(Arc<Bytes>),
+    Bytes(Arc<Bytes>)
 }
 
 impl Payload {
-    pub fn len(&self) -> usize {
+    pub fn bytes_len(&self) -> usize {
         match self {
             Payload::String(val) => val.as_bytes().len(),
-            Payload::Bytes(val) => val.len(),
+            Payload::Bytes(val) => val.len()
         }
     }
+
     pub fn as_bytes(&self) -> &[u8] {
         match self {
             Payload::String(val) => val.as_bytes(),
-            Payload::Bytes(val) => val.as_ref(),
+            Payload::Bytes(val) => val.as_ref()
         }
     }
 }
@@ -28,7 +31,7 @@ impl Debug for Payload {
         match self {
             Payload::String(val) => {
                 write!(f, "Payload: {:?}", val)
-            }
+            },
             Payload::Bytes(val) => {
                 write!(f, "Payload: Bytes({})", val.len())
             }

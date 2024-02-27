@@ -20,36 +20,35 @@ pub type PubComp = PubCommon<PubCompTy>;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PubCommon<Ty: Common> {
     V4 {
-        packet_id: u16,
+        packet_id: u16
     },
     V5 {
-        packet_id: u16,
-        reason: Ty::Reason,
-        reason_string: Option<String>,
-        user_properties: Vec<(String, String)>,
+        packet_id:       u16,
+        reason:          Ty::Reason,
+        reason_string:   Option<String>,
+        user_properties: Vec<(String, String)>
     },
     V5WriteMode {
-        packet_id: u16,
-        reason: Ty::Reason,
-        had_reason_string: bool,
+        packet_id:           u16,
+        reason:              Ty::Reason,
+        had_reason_string:   bool,
         had_user_properties: bool,
-        properties: BytesMut,
-    },
+        properties:          BytesMut
+    }
 }
 
 impl<Ty: Common> Event for PubCommon<Ty> {
     fn name() -> &'static str
     where
-        Self: Sized,
-    {
+        Self: Sized {
         "Event"
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PubCommonProperties {
-    pub reason_string: Option<String>,
-    pub user_properties: Vec<(String, String)>,
+    pub reason_string:   Option<String>,
+    pub user_properties: Vec<(String, String)>
 }
 
 impl<Ty: Common> PubCommon<Ty> {
@@ -61,8 +60,8 @@ impl<Ty: Common> PubCommon<Ty> {
                 reason: Ty::Reason::default(),
                 had_reason_string: false,
                 had_user_properties: false,
-                properties: Default::default(),
-            },
+                properties: Default::default()
+            }
         }
     }
 
@@ -70,13 +69,13 @@ impl<Ty: Common> PubCommon<Ty> {
         match self {
             PubCommon::V4 { packet_id, .. } => *packet_id,
             PubCommon::V5 { packet_id, .. } => *packet_id,
-            PubCommon::V5WriteMode { packet_id, .. } => *packet_id,
+            PubCommon::V5WriteMode { packet_id, .. } => *packet_id
         }
     }
 
     pub fn set_reason_string(
         &mut self,
-        reason_string: String,
+        reason_string: String
     ) -> Result<()> {
         match self {
             PubCommon::V4 { .. } => {
@@ -90,20 +89,20 @@ impl<Ty: Common> PubCommon<Ty> {
                 properties,
                 ..
             } => {
-                if *had_reason_string == true {
+                if *had_reason_string {
                     bail!("should not be reached");
                 }
                 properties.put_u8(PropertyType::ReasonString as u8);
                 write_mqtt_string(properties, reason_string.as_str());
                 Ok(())
-            },
+            }
         }
     }
 
     pub fn add_user_property(
         &mut self,
         key: String,
-        val: String,
+        val: String
     ) -> Result<()> {
         match self {
             PubCommon::V4 { .. } => {
@@ -122,14 +121,14 @@ impl<Ty: Common> PubCommon<Ty> {
                 write_mqtt_string(properties, key.as_str());
                 write_mqtt_string(properties, val.as_str());
                 Ok(())
-            },
+            }
         }
     }
 
     pub fn read(
         fixed_header: FixedHeader,
         mut bytes: Bytes,
-        protocol: Protocol,
+        protocol: Protocol
     ) -> Result<Self, PacketParseError> {
         let variable_header_index = fixed_header.fixed_header_len;
         bytes.advance(variable_header_index);
@@ -137,21 +136,19 @@ impl<Ty: Common> PubCommon<Ty> {
         match protocol {
             Protocol::V4 => {
                 if fixed_header.remaining_len == 2 {
-                    return Ok(PubCommon::V4 { packet_id });
+                    Ok(PubCommon::V4 { packet_id })
                 } else {
-                    return Err(
-                        PacketParseError::MalformedRemainingLength,
-                    );
+                    Err(PacketParseError::MalformedRemainingLength)
                 }
             },
             Protocol::V5 => {
                 if fixed_header.remaining_len == 2 {
-                    return Ok(PubCommon::V5 {
+                    Ok(PubCommon::V5 {
                         packet_id,
                         reason: Ty::Reason::default(),
                         reason_string: None,
-                        user_properties: vec![],
-                    });
+                        user_properties: vec![]
+                    })
                 } else {
                     let ack_reason = read_u8(&mut bytes)?;
                     if fixed_header.remaining_len < 4 {
@@ -159,22 +156,24 @@ impl<Ty: Common> PubCommon<Ty> {
                             packet_id,
                             reason: Ty::reason(ack_reason)?,
                             reason_string: None,
-                            user_properties: vec![],
+                            user_properties: vec![]
                         });
                     }
-                    let Some(properties) = Self::read_properties(&mut bytes)? else {
+                    let Some(properties) =
+                        Self::read_properties(&mut bytes)?
+                    else {
                         return Ok(PubCommon::V5 {
                             packet_id,
                             reason: Ty::reason(ack_reason)?,
                             reason_string: None,
-                            user_properties: vec![],
+                            user_properties: vec![]
                         });
                     };
                     return Ok(PubCommon::V5 {
                         packet_id,
                         reason: Ty::reason(ack_reason)?,
                         reason_string: properties.reason_string,
-                        user_properties: properties.user_properties,
+                        user_properties: properties.user_properties
                     });
                 }
             },
@@ -182,7 +181,7 @@ impl<Ty: Common> PubCommon<Ty> {
     }
 
     pub fn read_properties(
-        bytes: &mut Bytes,
+        bytes: &mut Bytes
     ) -> Result<Option<PubCommonProperties>, PacketParseError> {
         let mut reason_string = None;
         let mut user_properties = Vec::new();
@@ -211,22 +210,24 @@ impl<Ty: Common> PubCommon<Ty> {
                 },
                 _ => {
                     return Err(
-                        PacketParseError::InvalidPropertyType(prop),
-                    )
+                        PacketParseError::InvalidPropertyType(prop)
+                    );
                 },
             }
         }
 
         Ok(Some(PubCommonProperties {
             reason_string,
-            user_properties,
+            user_properties
         }))
     }
+
     pub fn data(&self) -> Arc<Bytes> {
         let mut buffer = BytesMut::new();
         self.write(&mut buffer);
         Arc::new(buffer.freeze())
     }
+
     pub fn write(&self, buffer: &mut BytesMut) -> usize {
         match self {
             PubCommon::V4 { packet_id } => {
@@ -255,7 +256,7 @@ impl<Ty: Common> PubCommon<Ty> {
                 buffer.put_u8(reason.as_u8());
                 write_mqtt_bytes(buffer, properties.as_ref());
                 len + 1 + count
-            },
+            }
         }
     }
 
@@ -285,7 +286,7 @@ impl<Ty: Common> PubCommon<Ty> {
                     len += properties_len_len + properties_len;
                 }
                 len
-            },
+            }
         }
         //
         // if let Some(p) = properties {
@@ -302,7 +303,7 @@ impl<Ty: Common> PubCommon<Ty> {
 #[repr(u8)]
 enum PropertyType {
     ReasonString = 31,
-    UserProperty = 38,
+    UserProperty = 38
 }
 
 pub trait Common: Sync + Send + 'static {
@@ -329,13 +330,14 @@ pub enum PubRecReason {
     TopicNameInvalid,
     PacketIdentifierInUse,
     QuotaExceeded,
-    PayloadFormatInvalid,
+    PayloadFormatInvalid
 }
 
 impl Reason for PubRecReason {
     fn is_success(&self) -> bool {
         *self == PubRecReason::Success
     }
+
     fn as_u8(&self) -> u8 {
         (*self) as u8
     }
@@ -357,8 +359,8 @@ impl Common for PubRecTy {
             153 => PubRecReason::PayloadFormatInvalid,
             num => {
                 return Err(
-                    PacketParseError::InvalidConnectReturnCode(num),
-                )
+                    PacketParseError::InvalidConnectReturnCode(num)
+                );
             },
         };
 
@@ -377,12 +379,13 @@ pub struct PubRelTy;
 #[repr(u8)]
 pub enum PubRelReason {
     Success,
-    PacketIdentifierNotFound,
+    PacketIdentifierNotFound
 }
 impl Reason for PubRelReason {
     fn is_success(&self) -> bool {
         *self == PubRelReason::Success
     }
+
     fn as_u8(&self) -> u8 {
         (*self) as u8
     }
@@ -403,12 +406,13 @@ impl Common for PubRelTy {
             146 => PubRelReason::PacketIdentifierNotFound,
             num => {
                 return Err(
-                    PacketParseError::InvalidConnectReturnCode(num),
-                )
+                    PacketParseError::InvalidConnectReturnCode(num)
+                );
             },
         };
         Ok(code)
     }
+
     fn ty() -> u8 {
         0x62
     }
@@ -420,12 +424,13 @@ pub struct PubCompTy;
 #[repr(u8)]
 pub enum PubCompReason {
     Success,
-    PacketIdentifierNotFound,
+    PacketIdentifierNotFound
 }
 impl Reason for PubCompReason {
     fn is_success(&self) -> bool {
         *self == PubCompReason::Success
     }
+
     fn as_u8(&self) -> u8 {
         (*self) as u8
     }
@@ -444,12 +449,13 @@ impl Common for PubCompTy {
             146 => PubCompReason::PacketIdentifierNotFound,
             num => {
                 return Err(
-                    PacketParseError::InvalidConnectReturnCode(num),
-                )
+                    PacketParseError::InvalidConnectReturnCode(num)
+                );
             },
         };
         Ok(code)
     }
+
     fn ty() -> u8 {
         0x70
     }
@@ -465,7 +471,7 @@ pub enum PubAckReason {
     TopicNameInvalid,
     PacketIdentifierInUse,
     QuotaExceeded,
-    PayloadFormatInvalid,
+    PayloadFormatInvalid
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -475,6 +481,7 @@ impl Reason for PubAckReason {
     fn is_success(&self) -> bool {
         *self == PubAckReason::Success
     }
+
     fn as_u8(&self) -> u8 {
         (*self) as u8
     }
@@ -500,8 +507,8 @@ impl Common for PubAckTy {
             153 => PubAckReason::PayloadFormatInvalid,
             num => {
                 return Err(
-                    PacketParseError::InvalidConnectReturnCode(num),
-                )
+                    PacketParseError::InvalidConnectReturnCode(num)
+                );
             },
         };
         Ok(code)
